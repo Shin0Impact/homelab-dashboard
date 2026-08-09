@@ -7,22 +7,40 @@ import { Sidebar, Topbar } from "./components/Navigation"
 import { Settings } from "./components/Settings"
 
 export default function App() {
-  const [authed, setAuthed] = useState(false)
+  // 1. Persist login state so it doesn't reset on error or refresh
+  const [authed, setAuthed] = useState(() => {
+    return localStorage.getItem("homelab_authed") === "true"
+  })
+  
   const [page, setPage] = useState("dashboard")
   const [services, setServices] = useState([])
+  const [loading, setLoading] = useState(false)
 
-  // Helper function to fetch container state
+  // 2. Robust container fetch with response validation
   const fetchContainers = useCallback(async () => {
     try {
-      const res = await fetch("/api/containers");
+      setLoading(true)
+      const res = await fetch("/api/containers")
+      
+      if (!res.ok) {
+        console.error(`API returned error status: ${res.status}`)
+        return
+      }
+
       const data = await res.json()
-      if (Array.isArray(data)) setServices(data)
+      if (Array.isArray(data)) {
+        setServices(data)
+      } else {
+        console.warn("API response was not an array:", data)
+      }
     } catch (err) {
       console.error("Error connecting to backend API:", err)
+    } finally {
+      setLoading(false)
     }
   }, [])
 
-  // Poll real Docker socket status every 5 seconds
+  // Poll real Docker socket status every 5 seconds when authed
   useEffect(() => {
     if (!authed) return
 
@@ -31,13 +49,25 @@ export default function App() {
     return () => clearInterval(interval)
   }, [authed, fetchContainers])
 
-  if (!authed) return <Login onSignIn={() => setAuthed(true)} />
+  const handleLogin = () => {
+    localStorage.setItem("homelab_authed", "true")
+    setAuthed(true)
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem("homelab_authed")
+    setAuthed(false)
+  }
+
+  if (!authed) {
+    return <Login onSignIn={handleLogin} />
+  }
 
   return (
     <div className="flex min-h-svh bg-background text-foreground">
-      <Sidebar current={page} onNavigate={setPage} onLogout={() => setAuthed(false)} />
+      <Sidebar current={page} onNavigate={setPage} onLogout={handleLogout} />
       <main className="flex min-w-0 flex-1 flex-col">
-        <Topbar title="Dashboard" subtitle="Live CasaOS Container Monitor" />
+        <Topbar title="Dashboard" subtitle="Live Container Monitor" />
         <div className="flex-1 overflow-y-auto">
           {page === "dashboard" && (
             <Dashboard services={services} onRefresh={fetchContainers} />
