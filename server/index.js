@@ -2,6 +2,11 @@ import express from "express";
 import cors from "cors";
 import Docker from "dockerode";
 import si from "systeminformation";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3333;
@@ -16,11 +21,6 @@ const docker = new Docker(
 
 app.use(cors());
 app.use(express.json());
-
-// Health Check
-//app.get("/", (req, res) => {
-//  res.json({ status: "ok", message: "Homelab API Server is running" });
-//});
 
 // Helper: Infer categories & icons based on container/image name
 function inferCategoryAndIcon(name, image) {
@@ -175,7 +175,15 @@ app.get("/api/telemetry", async (req, res) => {
   }
 });
 
+// 5. SERVE FRONTEND STATIC FILES
+app.use(express.static(path.join(__dirname, "../dist")));
+
+// Fallback catch-all route for single-page client routing
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../dist/index.html"));
+});
+
 // START SERVER
 app.listen(PORT, () => {
-  console.log(`Homelab API server running on http://localhost:${PORT}`);
+  console.log(`Homelab Dashboard running on http://localhost:${PORT}`);
 });

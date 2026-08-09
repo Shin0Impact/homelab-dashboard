@@ -12,8 +12,9 @@ WORKDIR /app
 COPY server/package*.json ./server/
 RUN cd server && npm install --production
 COPY server ./server
-COPY --from=build-frontend /app/dist ./server/public
+# Copy from stage 1
+COPY --from=build-frontend /app/dist ./dist
 
 ENV NODE_ENV=production
-EXPOSE 3001
+EXPOSE 3333
 CMD ["node", "server/index.js"]
