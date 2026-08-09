@@ -4,7 +4,7 @@ import Docker from "dockerode";
 import si from "systeminformation";
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3333;
 
 // Auto-detect Windows Named Pipe vs Linux Socket
 const isWindows = process.platform === "win32";

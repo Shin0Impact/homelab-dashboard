@@ -58,7 +58,7 @@ export function Metrics() {
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
-        const res = await fetch("http://localhost:3001/api/telemetry")
+        const res = await fetch("http://localhost:3333/api/telemetry")
         const data = await res.json()
 
         if (!data || data.error) return

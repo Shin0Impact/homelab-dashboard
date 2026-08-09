@@ -38,7 +38,7 @@ export function Dashboard({ services = [], onRefresh }) {
   const handleAction = async (id, action) => {
     setLoadingAction(`${id}-${action}`)
     try {
-      const res = await fetch(`http://localhost:3001/api/containers/${id}/${action}`, {
+      const res = await fetch(`http://localhost:3333/api/containers/${id}/${action}`, {
         method: "POST",
       })
       const data = await res.json()
