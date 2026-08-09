@@ -11,7 +11,7 @@ export function LogModal({ container, onClose }) {
     if (!container) return;
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:3001/api/containers/${container.id}/logs`);
+      const res = await fetch(`/api/containers/${id}/logs`);
       const text = await res.text();
       setLogs(text);
     } catch (err) {

@@ -14,7 +14,7 @@ export default function App() {
   // Helper function to fetch container state
   const fetchContainers = useCallback(async () => {
     try {
-      const res = await fetch("http://localhost:3333/api/containers")
+      const res = await fetch("/api/containers");
       const data = await res.json()
       if (Array.isArray(data)) setServices(data)
     } catch (err) {
