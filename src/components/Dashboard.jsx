@@ -120,6 +120,13 @@ export function Dashboard({ services = [], onRefresh }) {
           const Icon = ICONS[s.icon] || Container
           const isActionBusy = loadingAction?.startsWith(s.id)
 
+          // DYNAMIC LAUNCH URL CALCULATION
+          const launchUrl = s.port || s.url?.includes("http")
+            ? s.port 
+              ? `${window.location.protocol}//${window.location.hostname}:${s.port}` 
+              : s.url 
+            : null;
+
           return (
             <div key={s.id} className={`group flex flex-col justify-between rounded-2xl p-5 transition-colors hover:bg-card/80 ${glass}`}>
               <div>
@@ -175,14 +182,14 @@ export function Dashboard({ services = [], onRefresh }) {
 
                 <a
                   href={launchUrl || "#"}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${
                     s.online && launchUrl
-                    ? "bg-secondary/60 text-foreground hover:bg-primary/15 hover:text-primary"
-                    : "pointer-events-none bg-secondary/20 text-muted-foreground/40"
+                      ? "bg-secondary/60 text-foreground hover:bg-primary/15 hover:text-primary"
+                      : "pointer-events-none bg-secondary/20 text-muted-foreground/40"
                   }`}
-                  >
+                >
                   Launch
                   <ExternalLink className="h-3.5 w-3.5" />
                 </a>
