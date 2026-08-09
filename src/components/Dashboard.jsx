@@ -174,15 +174,15 @@ export function Dashboard({ services = [], onRefresh }) {
                 )}
 
                 <a
-                  href={s.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${
-                    s.online && s.url !== "#"
-                      ? "bg-secondary/60 text-foreground hover:bg-primary/15 hover:text-primary"
-                      : "pointer-events-none bg-secondary/20 text-muted-foreground/40"
+                  href={launchUrl || "#"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${
+                    s.online && launchUrl
+                    ? "bg-secondary/60 text-foreground hover:bg-primary/15 hover:text-primary"
+                    : "pointer-events-none bg-secondary/20 text-muted-foreground/40"
                   }`}
-                >
+                  >
                   Launch
                   <ExternalLink className="h-3.5 w-3.5" />
                 </a>

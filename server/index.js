@@ -72,7 +72,7 @@ app.get("/api/containers", async (req, res) => {
         name: cleanName,
         status: state,
         online: state === "running",
-        url: publicPort ? `http://localhost:${publicPort}` : "#",
+        port: publicPort || null, // Pass back just the raw port
         category,
         icon,
         image: c.Image,
