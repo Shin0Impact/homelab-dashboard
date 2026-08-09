@@ -72,6 +72,9 @@ export default function App() {
           {page === "dashboard" && (
             <Dashboard services={services} onRefresh={fetchContainers} />
           )}
+          {page === "manage" && (
+            <Manage services={services} onRefresh={fetchContainers} />
+          )}
           {page === "metrics" && <Metrics />}
           {page === "settings" && <Settings />}
         </div>

@@ -16,16 +16,16 @@ function Field({ label, children }) {
 
 function ServiceModal({ initial, onClose, onSave }) {
   const [name, setName] = useState(initial?.name ?? "")
-  const [url, setUrl] = useState(initial?.url ?? "")
+  const [port, setPort] = useState(initial?.port ?? "")
   const [category, setCategory] = useState(initial?.category ?? "Infra")
   const [icon, setIcon] = useState(initial?.icon ?? "container")
 
   function handleSave() {
-    if (!name.trim() || !url.trim()) return
+    if (!name.trim()) return
     onSave({
       id: initial?.id ?? crypto.randomUUID(),
       name: name.trim(),
-      url: url.trim(),
+      port: port ? Number(port) : null,
       category,
       icon,
       online: initial?.online ?? true,
@@ -52,11 +52,12 @@ function ServiceModal({ initial, onClose, onSave }) {
               className="w-full rounded-lg border border-white/10 bg-input/40 px-3 py-2 text-sm outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
             />
           </Field>
-          <Field label="Target URL">
+          <Field label="Exposed Port">
             <input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="http://100.64.0.x:port"
+              type="number"
+              value={port}
+              onChange={(e) => setPort(e.target.value)}
+              placeholder="e.g. 9000"
               className="w-full rounded-lg border border-white/10 bg-input/40 px-3 py-2 font-mono text-sm outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
             />
           </Field>
@@ -76,11 +77,12 @@ function ServiceModal({ initial, onClose, onSave }) {
           <Field label="Icon">
             <div className="flex flex-wrap gap-2">
               {ICON_OPTIONS.map((key) => {
-                const Icon = ICONS[key]
+                const Icon = ICONS[key] || Container
                 const selected = icon === key
                 return (
                   <button
                     key={key}
+                    type="button"
                     onClick={() => setIcon(key)}
                     className={`flex h-10 w-10 items-center justify-center rounded-lg border transition-colors ${
                       selected
@@ -115,7 +117,7 @@ function ServiceModal({ initial, onClose, onSave }) {
   )
 }
 
-export function Manage({ services, onAdd, onUpdate, onDelete }) {
+export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
 
@@ -128,8 +130,8 @@ export function Manage({ services, onAdd, onUpdate, onDelete }) {
     setModalOpen(true)
   }
   function handleSave(s) {
-    if (editing) onUpdate(s)
-    else onAdd(s)
+    if (editing && onUpdate) onUpdate(s)
+    else if (onAdd) onAdd(s)
     setModalOpen(false)
   }
 
@@ -151,7 +153,7 @@ export function Manage({ services, onAdd, onUpdate, onDelete }) {
           <thead>
             <tr className="border-b border-white/5 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <th className="px-5 py-3 font-medium">Service</th>
-              <th className="px-5 py-3 font-medium">Local URL</th>
+              <th className="px-5 py-3 font-medium">Local URL / Port</th>
               <th className="px-5 py-3 font-medium">Category</th>
               <th className="px-5 py-3 font-medium">Status</th>
               <th className="px-5 py-3 text-right font-medium">Actions</th>
@@ -160,6 +162,10 @@ export function Manage({ services, onAdd, onUpdate, onDelete }) {
           <tbody>
             {services.map((s) => {
               const Icon = ICONS[s.icon] || Container
+              const computedUrl = s.port
+                ? `${window.location.protocol}//${window.location.hostname}:${s.port}`
+                : s.url || "No exposed port"
+
               return (
                 <tr key={s.id} className="border-b border-white/5 last:border-0 hover:bg-secondary/30">
                   <td className="px-5 py-3">
@@ -170,7 +176,7 @@ export function Manage({ services, onAdd, onUpdate, onDelete }) {
                       <span className="font-medium">{s.name}</span>
                     </div>
                   </td>
-                  <td className="px-5 py-3 font-mono text-xs text-muted-foreground">{s.url}</td>
+                  <td className="px-5 py-3 font-mono text-xs text-muted-foreground">{computedUrl}</td>
                   <td className="px-5 py-3">
                     <CategoryTag category={s.category} />
                   </td>
@@ -189,7 +195,7 @@ export function Manage({ services, onAdd, onUpdate, onDelete }) {
                         <Pencil className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => onDelete(s.id)}
+                        onClick={() => onDelete && onDelete(s.id)}
                         className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -197,8 +203,15 @@ export function Manage({ services, onAdd, onUpdate, onDelete }) {
                     </div>
                   </td>
                 </tr>
-              )
+              );
             })}
+            {services.length === 0 && (
+              <tr>
+                <td colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                  No services registered or discovered.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
