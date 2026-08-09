@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { Dashboard } from "./components/Dashboard"
 import { Login } from "./components/Login"
 import { Manage } from "./components/Manage"
@@ -11,24 +11,25 @@ export default function App() {
   const [page, setPage] = useState("dashboard")
   const [services, setServices] = useState([])
 
+  // Helper function to fetch container state
+  const fetchContainers = useCallback(async () => {
+    try {
+      const res = await fetch("http://localhost:3001/api/containers")
+      const data = await res.json()
+      if (Array.isArray(data)) setServices(data)
+    } catch (err) {
+      console.error("Error connecting to backend API:", err)
+    }
+  }, [])
+
   // Poll real Docker socket status every 5 seconds
   useEffect(() => {
     if (!authed) return
 
-    const fetchContainers = async () => {
-      try {
-        const res = await fetch("http://localhost:3001/api/containers")
-        const data = await res.json()
-        if (Array.isArray(data)) setServices(data)
-      } catch (err) {
-        console.error("Error connecting to backend API:", err)
-      }
-    }
-
     fetchContainers()
     const interval = setInterval(fetchContainers, 5000)
     return () => clearInterval(interval)
-  }, [authed])
+  }, [authed, fetchContainers])
 
   if (!authed) return <Login onSignIn={() => setAuthed(true)} />
 
@@ -38,7 +39,9 @@ export default function App() {
       <main className="flex min-w-0 flex-1 flex-col">
         <Topbar title="Dashboard" subtitle="Live CasaOS Container Monitor" />
         <div className="flex-1 overflow-y-auto">
-          {page === "dashboard" && <Dashboard services={services} />}
+          {page === "dashboard" && (
+            <Dashboard services={services} onRefresh={fetchContainers} />
+          )}
           {page === "metrics" && <Metrics />}
           {page === "settings" && <Settings />}
         </div>

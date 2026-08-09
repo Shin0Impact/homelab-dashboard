@@ -10,6 +10,6 @@ services:
       - "3001:3001"
     volumes:
       # Mount host Docker socket read-only to monitor running containers
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - NODE_ENV=production
