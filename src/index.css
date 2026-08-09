@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: oklch(0.12 0.01 260);
+  --color-foreground: oklch(0.97 0 0);
+
+  --color-card: oklch(0.15 0.01 260);
+  --color-card-foreground: oklch(0.97 0 0);
+
+  --color-popover: oklch(0.15 0.01 260);
+  --color-popover-foreground: oklch(0.97 0 0);
+
+  /* Cyan/Teal Primary Accent */
+  --color-primary: oklch(0.78 0.16 195);
+  --color-primary-foreground: oklch(0.12 0.01 260);
+
+  /* Secondary, Muted & Borders */
+  --color-secondary: oklch(0.22 0.01 260);
+  --color-secondary-foreground: oklch(0.97 0 0);
+  --color-muted: oklch(0.22 0.01 260);
+  --color-muted-foreground: oklch(0.65 0.01 260);
+  --color-accent: oklch(0.22 0.01 260);
+  --color-accent-foreground: oklch(0.97 0 0);
+  --color-destructive: oklch(0.63 0.24 25);
+  --color-destructive-foreground: oklch(0.98 0 0);
+  --color-border: oklch(0.22 0.01 260);
+  --color-input: oklch(0.22 0.01 260);
+
+  --color-sidebar: oklch(0.13 0.01 260);
+
+  /* Category Badges & Telemetry Chart Accents */
+  --color-chart-1: oklch(0.78 0.16 195); /* Infra / Cyan */
+  --color-chart-2: oklch(0.72 0.19 150); /* Network / Emerald Green */
+  --color-chart-3: oklch(0.68 0.22 290); /* AI / Purple */
+  --color-chart-4: oklch(0.75 0.18 65); /* Automation / Amber */
+  --color-chart-5: oklch(0.65 0.24 10); /* Media / Rose Pink */
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
