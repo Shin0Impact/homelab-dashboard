@@ -16,7 +16,7 @@ import {
 
 const CHART_COLORS = {
   cpu: "#00d8d6",     // Cyan
-  network: "#10b981",  // Emerald Green
+  network: "#10b981",  // Emerald
   upload: "#f59e0b",   // Amber
   memory: "#a855f7",   // Purple
 }
@@ -44,7 +44,7 @@ function ChartCard({ title, subtitle, icon: Icon, children }) {
           <p className="text-xs text-muted-foreground">{subtitle}</p>
         </div>
       </div>
-      <div className="w-full min-h-[220px]">
+      <div className="w-full min-h-[200px]">
         {children}
       </div>
     </div>
@@ -63,7 +63,6 @@ export function Metrics() {
   const [totalRam, setTotalRam] = useState("16")
   const [errorMsg, setErrorMsg] = useState(null)
 
-  // Task Manager Process List State
   const [processes, setProcesses] = useState([
     { id: "1", name: "homelab-dashboard", pid: 1021, cpu: 1.2, mem: "140 MB", status: "running" },
     { id: "2", name: "searxng", pid: 1482, cpu: 0.5, mem: "85 MB", status: "running" },
@@ -74,7 +73,6 @@ export function Metrics() {
 
   const fetchMetrics = async () => {
     try {
-      // Try /api/telemetry first, fallback to /api/metrics if needed
       let res = await fetch("/api/telemetry")
       
       if (!res.ok || !res.headers.get("content-type")?.includes("application/json")) {
@@ -92,29 +90,19 @@ export function Metrics() {
       setErrorMsg(null)
       const timeStr = data.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
-      // 1. Append CPU sample (keep max 20 data points)
       if (data.cpuLoad !== undefined) {
-        setCpuHistory((prev) => {
-          const next = [...prev, { t: timeStr, cpu: data.cpuLoad }]
-          return next.slice(-20)
-        })
+        setCpuHistory((prev) => [...prev, { t: timeStr, cpu: data.cpuLoad }].slice(-20))
       }
 
-      // 2. Append Network sample (keep max 20 data points)
       if (data.net) {
-        setNetHistory((prev) => {
-          const next = [...prev, { t: timeStr, down: data.net?.down || 0, up: data.net?.up || 0 }]
-          return next.slice(-20)
-        })
+        setNetHistory((prev) => [...prev, { t: timeStr, down: data.net?.down || 0, up: data.net?.up || 0 }].slice(-20))
       }
 
-      // 3. Update RAM allocation bars
       if (data.ram) {
         setRamData(data.ram)
         if (data.totalMemGB) setTotalRam(data.totalMemGB)
       }
 
-      // 4. Update processes if provided by backend
       if (data.processes) {
         setProcesses(data.processes)
       }
@@ -130,7 +118,18 @@ export function Metrics() {
     return () => clearInterval(interval)
   }, [])
 
-  const handleToggleProcess = (id) => {
+  const handleToggleProcess = async (id) => {
+    const proc = processes.find((p) => p.id === id)
+    if (!proc) return
+    const action = proc.status === "running" ? "stop" : "start"
+
+    try {
+      // Dispatch action to express backend docker route
+      await fetch(`/api/containers/${id}/${action}`, { method: "POST" })
+    } catch {
+      // Fallback local toggle state
+    }
+
     setProcesses((prev) =>
       prev.map((p) => {
         if (p.id === id) {
@@ -156,7 +155,6 @@ export function Metrics() {
 
       {/* --- TELEMETRY CHARTS --- */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* CPU Chart */}
         <ChartCard title="CPU Usage" subtitle="Live stream · %" icon={Cpu}>
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={cpuHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -175,7 +173,6 @@ export function Metrics() {
           </ResponsiveContainer>
         </ChartCard>
 
-        {/* Memory Allocation Chart */}
         <ChartCard title="Memory Allocation" subtitle={`${totalRam} GB total · GB per pool`} icon={MemoryStick}>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={ramData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -189,7 +186,6 @@ export function Metrics() {
         </ChartCard>
       </div>
 
-      {/* Network Chart */}
       <ChartCard title="Network Throughput" subtitle="Download / Upload · KB/s" icon={Network}>
         <ResponsiveContainer width="100%" height={240}>
           <LineChart data={netHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
