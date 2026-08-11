@@ -39,7 +39,7 @@ const docker = new Docker(
 app.use(cors());
 app.use(express.json());
 
-// Serve static frontend files from Vite production build (../dist or ./dist)
+// Serve static frontend files from Vite production build
 const distPath = fs.existsSync(path.resolve(__dirname, "../dist"))
   ? path.resolve(__dirname, "../dist")
   : path.resolve(__dirname, "dist");
@@ -111,7 +111,7 @@ function inferCategoryAndIcon(rawName, image = "") {
   };
 }
 
-// Containers & Services Endpoint with robust port detection
+// Containers & Services Endpoint with Fixed Port Detection
 app.get(["/api/containers", "/api/services"], async (req, res) => {
   res.setHeader("Content-Type", "application/json");
 
@@ -119,8 +119,9 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
     const rawContainers = await docker.listContainers({ all: true });
     const customOverrides = getCustomServices();
 
-    // Dynamically grab the active hostname (Tailscale IP, LAN IP, domain, etc.)
-    const activeHost = req.hostname;
+    // Extract active host from request header (supports Tailscale IP / domain via proxy)
+    const hostHeader = req.headers.host || req.hostname;
+    const clientHost = hostHeader.split(":")[0];
 
     const services = rawContainers.map((container) => {
       const rawName = container.Names[0]
@@ -129,35 +130,38 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
       const meta = inferCategoryAndIcon(rawName, container.Image);
       const custom = customOverrides.find((c) => c.id === container.Id) || {};
 
-      // 1. Improved Port Extraction Strategy
-      let detectedPort = null;
+      // 1. Strict Public Port Extraction
+      let publicPort = null;
 
       if (Array.isArray(container.Ports) && container.Ports.length > 0) {
-        // Priority A: Look for explicit PublicPort binding
-        const boundPort = container.Ports.find((p) => p.PublicPort || p.Public);
+        // Find explicitly exposed host port
+        const boundPort = container.Ports.find(
+          (p) => p.PublicPort && p.PublicPort > 0,
+        );
         if (boundPort) {
-          detectedPort = boundPort.PublicPort || boundPort.Public;
-        } else {
-          // Priority B: Fall back to primary PrivatePort if no public mapping is explicitly defined
-          const firstPort = container.Ports[0];
-          detectedPort = firstPort.PrivatePort || firstPort.Private;
+          publicPort = boundPort.PublicPort;
         }
       }
 
-      // 2. Build URL preserving your active network domain/Tailscale IP
-      const dynamicUrl = detectedPort
-        ? `http://${activeHost}:${detectedPort}`
-        : "#";
+      // 2. Determine target web URL
+      let finalUrl = null;
+      if (custom.url) {
+        finalUrl = custom.url;
+      } else if (publicPort) {
+        finalUrl = `http://${clientHost}:${publicPort}`;
+      }
 
       return {
         id: container.Id,
         name: custom.name || rawName,
         status: container.State === "running" ? "online" : "offline",
+        online: container.State === "running",
         state: container.State,
         category: custom.category || meta.category,
         icon: custom.icon || meta.icon,
         iconUrl: custom.iconUrl || meta.iconUrl,
-        url: custom.url || dynamicUrl,
+        port: publicPort, // Directly pass explicit port to frontend
+        url: finalUrl,
         image: container.Image,
         ports: container.Ports,
       };
@@ -166,7 +170,7 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
     res.json({
       services,
       totalContainers: services.length,
-      onlineCount: services.filter((s) => s.status === "online").length,
+      onlineCount: services.filter((s) => s.online).length,
     });
   } catch (err) {
     res
@@ -182,12 +186,11 @@ app.get("/api/telemetry", async (req, res) => {
   try {
     let dockerContainers = [];
     try {
-      dockerContainers = await docker.listContainers({ all: false }); // running only
+      dockerContainers = await docker.listContainers({ all: false });
     } catch (e) {
       // Docker socket fallback
     }
 
-    // Map container stats to process items for Task Manager and sort by CPU usage descending
     const processList = dockerContainers
       .map((c) => {
         const cleanName = c.Names[0].replace("/", "");
@@ -195,7 +198,7 @@ app.get("/api/telemetry", async (req, res) => {
           id: c.Id,
           name: cleanName,
           pid: c.Id.substring(0, 8),
-          cpu: (Math.random() * 5 + 0.5).toFixed(1), // Live sample percentage
+          cpu: (Math.random() * 5 + 0.5).toFixed(1),
           mem: `${Math.floor(Math.random() * 300 + 100)} MB`,
           status: c.State === "running" ? "running" : "stopped",
         };
@@ -269,7 +272,7 @@ app.put("/api/services/:id", (req, res) => {
   }
 });
 
-// Catch-all route to serve React's index.html for UI routing on port 3333
+// Catch-all route for Vite single-page application routing
 app.get("*", (req, res) => {
   const indexPath = path.join(distPath, "index.html");
   if (fs.existsSync(indexPath)) {
