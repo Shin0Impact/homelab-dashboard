@@ -11,27 +11,25 @@ export default function App() {
     return localStorage.getItem("homelab_authed") === "true"
   })
 
-  const [page, setPage] = useState("dashboard")
-  const [services, setServices] = useState([])
-  const [loading, setLoading] = useState(false)
+const [services, setServices] = useState([]);
+const [categories, setCategories] = useState([]);
 
-  const fetchContainers = useCallback(async () => {
-    try {
-      setLoading(true)
-      const res = await fetch("/api/containers")
-      if (!res.ok) return
+const fetchServices = async () => {
+  try {
+    const res = await fetch("/api/containers");
+    const data = await res.json();
 
-      const data = await res.json()
-      if (Array.isArray(data)) {
-        setServices(data)
-      }
-    } catch (err) {
-      console.error("Error connecting to backend API:", err)
-    } finally {
-      setLoading(false)
+    // Check if response is wrapped in the new { services, categories } structure
+    if (Array.isArray(data)) {
+      setServices(data);
+    } else {
+      setServices(data.services || []);
+      setCategories(data.categories || []);
     }
-  }, [])
-
+  } catch (err) {
+    console.error("Failed to load services:", err);
+  }
+};
   useEffect(() => {
     if (!authed) return
     fetchContainers()
