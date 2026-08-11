@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { Container, Eye, EyeOff, Pencil, Plus, Trash2, X } from "lucide-react"
+import { Container, Eye, EyeOff, Pencil, Plus, Search, Trash2, X } from "lucide-react"
 import { ICONS, CategoryTag, ServiceIcon, StatusDot, glass } from "./UIHelpers"
 
 const ICON_OPTIONS = ["container", "image", "cctv", "shield", "workflow", "bot", "music", "search", "download", "video"]
@@ -123,6 +123,7 @@ function ServiceModal({ initial, onClose, onSave }) {
 export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
+  const [searchTerm, setSearchTerm] = useState("")
 
   function openAdd() {
     setEditing(null)
@@ -144,18 +145,45 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
     }
   }
 
+  // Filter services dynamically by name, port, or category
+  const filteredServices = services.filter((s) => {
+    const q = searchTerm.toLowerCase()
+    return (
+      s.name?.toLowerCase().includes(q) ||
+      s.category?.toLowerCase().includes(q) ||
+      s.port?.toString().includes(q) ||
+      s.url?.toLowerCase().includes(q)
+    )
+  })
+
   return (
     <div className="space-y-6 p-4 sm:p-6 md:p-8">
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-sm text-muted-foreground">{services.length} registered services</p>
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Add New Service</span>
-          <span className="sm:hidden">Add</span>
-        </button>
+      {/* Search & Header Control Bar */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search services by name, port, category..."
+            className="w-full rounded-xl border border-white/10 bg-input/40 pl-9 pr-4 py-2 text-sm outline-none placeholder:text-muted-foreground focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4 sm:justify-end">
+          <p className="text-sm text-muted-foreground">
+            {filteredServices.length} of {services.length} services
+          </p>
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Add New Service</span>
+            <span className="sm:hidden">Add</span>
+          </button>
+        </div>
       </div>
 
       {/* Desktop Table View */}
@@ -172,7 +200,7 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
             </tr>
           </thead>
           <tbody>
-            {services.map((s) => {
+            {filteredServices.map((s) => {
               const computedUrl = s.port
                 ? `${window.location.protocol}//${window.location.hostname}:${s.port}`
                 : s.url || "No exposed port"
@@ -232,10 +260,10 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
                 </tr>
               )
             })}
-            {services.length === 0 && (
+            {filteredServices.length === 0 && (
               <tr>
                 <td colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
-                  No services registered or discovered.
+                  {services.length === 0 ? "No services registered or discovered." : "No services match your search."}
                 </td>
               </tr>
             )}
@@ -245,7 +273,7 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
 
       {/* Mobile Stacked Card View */}
       <div className="space-y-3 md:hidden">
-        {services.map((s) => {
+        {filteredServices.map((s) => {
           const computedUrl = s.port
             ? `${window.location.protocol}//${window.location.hostname}:${s.port}`
             : s.url || "No exposed port"
@@ -301,9 +329,9 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
           )
         })}
 
-        {services.length === 0 && (
+        {filteredServices.length === 0 && (
           <div className={`py-8 text-center text-sm text-muted-foreground ${glass} rounded-xl`}>
-            No services registered or discovered.
+            {services.length === 0 ? "No services registered or discovered." : "No services match your search."}
           </div>
         )}
       </div>

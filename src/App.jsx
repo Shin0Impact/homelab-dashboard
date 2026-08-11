@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react"
 import { Dashboard } from "./components/Dashboard"
 import { Login } from "./components/Login"
 import { Manage } from "./components/Manage"
+import { ContainerManagement } from "./components/ContainerManagement"
 import { Metrics } from "./components/Metrics"
 import { Sidebar, Topbar } from "./components/Navigation"
 import { Settings } from "./components/Settings"
@@ -9,6 +10,7 @@ import { Settings } from "./components/Settings"
 const PAGE_META = {
   dashboard: { title: "Dashboard", subtitle: "Live Container Monitor" },
   manage: { title: "Manage Services", subtitle: "Configure & Register Endpoints" },
+  containers: { title: "Container Control", subtitle: "Start, Stop & Restart Runtime Instances" },
   metrics: { title: "System Telemetry", subtitle: "Host Resource Utilization" },
   settings: { title: "Settings", subtitle: "Preferences & System Configuration" },
 }
@@ -101,16 +103,13 @@ export default function App() {
 
   return (
     <div className="flex min-h-svh w-full flex-col bg-background text-foreground md:flex-row">
-      {/* Handles desktop fixed sidebar + mobile header bar & slide-out drawer */}
       <Sidebar current={page} onNavigate={setPage} onLogout={handleLogout} />
 
       <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
-        {/* Desktop Header */}
         <div className="hidden md:block">
           <Topbar title={meta.title} subtitle={meta.subtitle} />
         </div>
 
-        {/* Dynamic Page Component */}
         <div className="flex-1 overflow-y-auto">
           {page === "dashboard" && (
             <Dashboard 
@@ -126,6 +125,12 @@ export default function App() {
               onAdd={handleAddService}
               onUpdate={handleUpdateService}
               onDelete={handleDeleteService}
+            />
+          )}
+          {page === "containers" && (
+            <ContainerManagement
+              services={services}
+              onRefresh={fetchContainers}
             />
           )}
           {page === "metrics" && <Metrics />}

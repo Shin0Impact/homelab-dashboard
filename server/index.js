@@ -130,7 +130,7 @@ function inferCategoryAndIcon(rawName, image = "") {
   };
 }
 
-// Containers & Services Endpoint with multi-stage port detection
+// Containers & Services Endpoint
 app.get(["/api/containers", "/api/services"], async (req, res) => {
   res.setHeader("Content-Type", "application/json");
 
@@ -147,11 +147,15 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
         : "unnamed";
       const cleanName = rawName.toLowerCase();
       const meta = inferCategoryAndIcon(rawName, container.Image);
-      const custom = customOverrides.find((c) => c.id === container.Id) || {};
+
+      // Match by container ID OR raw container name so updates persist
+      const custom =
+        customOverrides.find(
+          (c) => c.id === container.Id || c.containerName === rawName,
+        ) || {};
 
       let detectedPort = null;
 
-      // 1. Check mapped host PublicPort
       if (Array.isArray(container.Ports) && container.Ports.length > 0) {
         const boundPort = container.Ports.find(
           (p) => p.PublicPort && p.PublicPort > 0,
@@ -159,13 +163,11 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
         if (boundPort) {
           detectedPort = boundPort.PublicPort;
         } else {
-          // Fall back to reported private exposed port
           const firstPrivate = container.Ports.find((p) => p.PrivatePort);
           if (firstPrivate) detectedPort = firstPrivate.PrivatePort;
         }
       }
 
-      // 2. If container runs host mode or bridge without explicit bindings, match known app defaults
       if (!detectedPort) {
         for (const [key, knownPort] of Object.entries(WELL_KNOWN_PORTS)) {
           if (cleanName.includes(key)) {
@@ -175,7 +177,6 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
         }
       }
 
-      // Skip non-interactive backend dependencies (e.g. database/redis/cron containers)
       const isInternalBackend =
         cleanName.includes("cron") ||
         cleanName.includes("redis") ||
@@ -193,6 +194,7 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
 
       return {
         id: container.Id,
+        containerName: rawName,
         name: custom.name || rawName,
         status: container.State === "running" ? "online" : "offline",
         online: container.State === "running",
@@ -292,17 +294,41 @@ app.post("/api/containers/:id/:action", async (req, res) => {
   }
 });
 
-// Update endpoint
-app.put("/api/services/:id", (req, res) => {
+// Resilient PUT endpoint matching by container ID or container name
+app.put("/api/services/:id", async (req, res) => {
   try {
     let custom = getCustomServices();
     const { id } = req.params;
-    const existingIndex = custom.findIndex((s) => s.id === id);
+
+    // Retrieve container details from Docker to grab its container name
+    let containerName = req.body.containerName || "";
+    if (!containerName) {
+      try {
+        const rawContainers = await docker.listContainers({ all: true });
+        const match = rawContainers.find((c) => c.Id === id);
+        if (match && match.Names[0]) {
+          containerName = match.Names[0].replace("/", "");
+        }
+      } catch (e) {
+        // Fallback if Docker inspect isn't accessible
+      }
+    }
+
+    const existingIndex = custom.findIndex(
+      (s) =>
+        s.id === id || (containerName && s.containerName === containerName),
+    );
+
+    const updatedData = {
+      id,
+      containerName,
+      ...req.body,
+    };
 
     if (existingIndex > -1) {
-      custom[existingIndex] = { ...custom[existingIndex], ...req.body };
+      custom[existingIndex] = { ...custom[existingIndex], ...updatedData };
     } else {
-      custom.push({ id, ...req.body });
+      custom.push(updatedData);
     }
 
     saveCustomServices(custom);
