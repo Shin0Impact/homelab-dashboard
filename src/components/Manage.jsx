@@ -38,7 +38,7 @@ function ServiceModal({ initial, onClose, onSave }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-background/70 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative w-full max-w-md rounded-2xl p-6 ${glass}`}>
+      <div className={`relative w-full max-w-md rounded-2xl p-5 sm:p-6 ${glass}`}>
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">{initial ? "Edit Service" : "Add New Service"}</h2>
           <button onClick={onClose} className="rounded-lg p-1 text-muted-foreground hover:bg-secondary/60 hover:text-foreground">
@@ -87,13 +87,13 @@ function ServiceModal({ initial, onClose, onSave }) {
                     key={key}
                     type="button"
                     onClick={() => setIcon(key)}
-                    className={`flex h-10 w-10 items-center justify-center rounded-lg border transition-colors ${
+                    className={`flex h-9 w-9 items-center justify-center rounded-lg border transition-colors sm:h-10 sm:w-10 ${
                       selected
                         ? "border-primary/40 bg-primary/15 text-primary"
                         : "border-white/10 bg-secondary/40 text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    <Icon className="h-5 w-5" />
+                    <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
                   </button>
                 )
               })}
@@ -145,19 +145,21 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
   }
 
   return (
-    <div className="space-y-6 p-8">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 p-4 sm:p-6 md:p-8">
+      <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-muted-foreground">{services.length} registered services</p>
         <button
           onClick={openAdd}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          className="flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
           <Plus className="h-4 w-4" />
-          Add New Service
+          <span className="hidden sm:inline">Add New Service</span>
+          <span className="sm:hidden">Add</span>
         </button>
       </div>
 
-      <div className={`overflow-hidden rounded-2xl ${glass}`}>
+      {/* Desktop Table View */}
+      <div className={`hidden overflow-hidden rounded-2xl md:block ${glass}`}>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/5 text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -228,7 +230,7 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
                     </div>
                   </td>
                 </tr>
-              );
+              )
             })}
             {services.length === 0 && (
               <tr>
@@ -239,6 +241,71 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile Stacked Card View */}
+      <div className="space-y-3 md:hidden">
+        {services.map((s) => {
+          const computedUrl = s.port
+            ? `${window.location.protocol}//${window.location.hostname}:${s.port}`
+            : s.url || "No exposed port"
+
+          return (
+            <div key={s.id} className={`rounded-xl p-4 ${glass} ${s.hidden ? "opacity-60" : ""}`}>
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/70 ring-1 ring-white/5">
+                    <ServiceIcon service={s} className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <p className="font-semibold text-sm">{s.name}</p>
+                    <p className="font-mono text-xs text-muted-foreground truncate max-w-[180px] sm:max-w-xs">{computedUrl}</p>
+                  </div>
+                </div>
+                <CategoryTag category={s.category} />
+              </div>
+
+              <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-3">
+                <div className="flex items-center gap-2">
+                  <StatusDot online={s.online} />
+                  <span className="text-xs text-muted-foreground">{s.online ? "Online" : "Offline"}</span>
+                  {s.hidden && <span className="ml-1 text-[11px] font-medium text-amber-400/80">• Hidden</span>}
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleToggleHide(s)}
+                    className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
+                      s.hidden
+                        ? "bg-amber-500/10 text-amber-400"
+                        : "bg-secondary/40 text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {s.hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                  <button
+                    onClick={() => openEdit(s)}
+                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/40 text-muted-foreground hover:text-foreground"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => onDelete && onDelete(s.id)}
+                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+
+        {services.length === 0 && (
+          <div className={`py-8 text-center text-sm text-muted-foreground ${glass} rounded-xl`}>
+            No services registered or discovered.
+          </div>
+        )}
       </div>
 
       {modalOpen && <ServiceModal initial={editing} onClose={() => setModalOpen(false)} onSave={handleSave} />}
