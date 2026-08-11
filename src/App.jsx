@@ -11,25 +11,28 @@ export default function App() {
     return localStorage.getItem("homelab_authed") === "true"
   })
 
-const [services, setServices] = useState([]);
-const [categories, setCategories] = useState([]);
+  // 1. Added missing page state
+  const [page, setPage] = useState("dashboard")
+  const [services, setServices] = useState([])
+  const [categories, setCategories] = useState([])
 
-const fetchServices = async () => {
-  try {
-    const res = await fetch("/api/containers");
-    const data = await res.json();
+  // 2. Wrapped in useCallback & standardized name to fetchContainers
+  const fetchContainers = useCallback(async () => {
+    try {
+      const res = await fetch("/api/containers")
+      const data = await res.json()
 
-    // Check if response is wrapped in the new { services, categories } structure
-    if (Array.isArray(data)) {
-      setServices(data);
-    } else {
-      setServices(data.services || []);
-      setCategories(data.categories || []);
+      if (Array.isArray(data)) {
+        setServices(data)
+      } else {
+        setServices(data.services || [])
+        setCategories(data.categories || [])
+      }
+    } catch (err) {
+      console.error("Failed to load services:", err)
     }
-  } catch (err) {
-    console.error("Failed to load services:", err);
-  }
-};
+  }, [])
+
   useEffect(() => {
     if (!authed) return
     fetchContainers()
@@ -96,11 +99,16 @@ const fetchServices = async () => {
         <Topbar title="Dashboard" subtitle="Live Container Monitor" />
         <div className="flex-1 overflow-y-auto">
           {page === "dashboard" && (
-            <Dashboard services={services} onRefresh={fetchContainers} />
+            <Dashboard 
+              services={services} 
+              categories={categories} 
+              onRefresh={fetchContainers} 
+            />
           )}
           {page === "manage" && (
             <Manage
               services={services}
+              categories={categories}
               onAdd={handleAddService}
               onUpdate={handleUpdateService}
               onDelete={handleDeleteService}
