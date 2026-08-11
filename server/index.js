@@ -39,7 +39,14 @@ const docker = new Docker(
 app.use(cors());
 app.use(express.json());
 
-// Advanced Container & Image Icon Matcher
+// Serve static frontend files from Vite production build (../dist or ./dist)
+const distPath = fs.existsSync(path.resolve(__dirname, "../dist"))
+  ? path.resolve(__dirname, "../dist")
+  : path.resolve(__dirname, "dist");
+
+app.use(express.static(distPath));
+
+// Icon matcher logic
 function inferCategoryAndIcon(rawName, image = "") {
   const nameLower = rawName.toLowerCase();
   const imageLower = image.toLowerCase();
@@ -47,7 +54,6 @@ function inferCategoryAndIcon(rawName, image = "") {
 
   let iconName = "";
 
-  // Explicit mappings based on container/image contents seen in your dashboard
   if (fullText.includes("open-webui") || fullText.includes("openwebui"))
     iconName = "open-webui";
   else if (fullText.includes("adguard")) iconName = "adguard-home";
@@ -68,7 +74,6 @@ function inferCategoryAndIcon(rawName, image = "") {
   else if (fullText.includes("postgres")) iconName = "postgresql";
   else if (fullText.includes("lidarr")) iconName = "lidarr";
   else {
-    // Fallback cleanup strategy
     let clean = nameLower
       .replace(/^(big-bear|docker|my|local)[-_]/, "")
       .replace(/[-_](main|app|server|container|service|1|2|3)$/g, "");
@@ -106,7 +111,7 @@ function inferCategoryAndIcon(rawName, image = "") {
   };
 }
 
-// 1. DOCKER DISCOVERY + CUSTOM MERGE + VISIBILITY FILTER
+// 1. Containers API
 app.get("/api/containers", async (req, res) => {
   try {
     const custom = getCustomServices();
@@ -144,7 +149,7 @@ app.get("/api/containers", async (req, res) => {
         icon: override?.icon || icon,
         iconUrl: override?.iconUrl || inferred.iconUrl,
         image: c.Image,
-        hidden: override?.hidden === true, // Carry over hide state
+        hidden: override?.hidden === true,
         isCustom: false,
       };
     });
@@ -172,7 +177,6 @@ app.get("/api/containers", async (req, res) => {
 
     const allServices = [...formattedDocker, ...customOnly];
 
-    // Build unique list of categories
     const defaultCategories = ["AI", "Media", "Infra", "Network", "Automation"];
     const detectedCategories = Array.from(
       new Set([
@@ -192,7 +196,25 @@ app.get("/api/containers", async (req, res) => {
   }
 });
 
-// Update endpoint (saves persistent edits like hidden status)
+// Container actions
+app.post("/api/containers/:id/:action", async (req, res) => {
+  const { id, action } = req.params;
+  try {
+    const container = docker.getContainer(id);
+    if (action === "start") await container.start();
+    else if (action === "stop") await container.stop();
+    else if (action === "restart") await container.restart();
+    else return res.status(400).json({ error: "Invalid action" });
+
+    res.json({ success: true });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: `Failed to ${action} container`, details: err.message });
+  }
+});
+
+// Update endpoint
 app.put("/api/services/:id", (req, res) => {
   try {
     let custom = getCustomServices();
@@ -212,5 +234,18 @@ app.put("/api/services/:id", (req, res) => {
   }
 });
 
-// Port listener
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Catch-all route to serve React's index.html for UI routing on port 3333
+app.get("*", (req, res) => {
+  const indexPath = path.join(distPath, "index.html");
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res
+      .status(404)
+      .send("Frontend build not found. Please run 'npm run build'.");
+  }
+});
+
+app.listen(PORT, () =>
+  console.log(`Server listening on http://localhost:${PORT}`),
+);
