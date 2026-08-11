@@ -39,14 +39,33 @@ const docker = new Docker(
 app.use(cors());
 app.use(express.json());
 
-// Serve static frontend files from Vite production build
 const distPath = fs.existsSync(path.resolve(__dirname, "../dist"))
   ? path.resolve(__dirname, "../dist")
   : path.resolve(__dirname, "dist");
 
 app.use(express.static(distPath));
 
-// Icon matcher logic
+// Known default web UI ports for common self-hosted applications
+const WELL_KNOWN_PORTS = {
+  "home-assistant": 8123,
+  homeassistant: 8123,
+  n8n: 5678,
+  qbittorrent: 8080,
+  nextcloud: 80,
+  immich: 2283,
+  "immich-server": 2283,
+  portainer: 9000,
+  "adguard-home": 3000,
+  adguard: 3000,
+  "open-webui": 8080,
+  navidrome: 4533,
+  frigate: 5000,
+  prowlarr: 9696,
+  lidarr: 8686,
+  searxng: 8080,
+  beets: 8337,
+};
+
 function inferCategoryAndIcon(rawName, image = "") {
   const nameLower = rawName.toLowerCase();
   const imageLower = image.toLowerCase();
@@ -111,7 +130,7 @@ function inferCategoryAndIcon(rawName, image = "") {
   };
 }
 
-// Containers & Services Endpoint with Fixed Port Detection
+// Containers & Services Endpoint with multi-stage port detection
 app.get(["/api/containers", "/api/services"], async (req, res) => {
   res.setHeader("Content-Type", "application/json");
 
@@ -119,7 +138,6 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
     const rawContainers = await docker.listContainers({ all: true });
     const customOverrides = getCustomServices();
 
-    // Extract active host from request header (supports Tailscale IP / domain via proxy)
     const hostHeader = req.headers.host || req.hostname;
     const clientHost = hostHeader.split(":")[0];
 
@@ -127,28 +145,50 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
       const rawName = container.Names[0]
         ? container.Names[0].replace("/", "")
         : "unnamed";
+      const cleanName = rawName.toLowerCase();
       const meta = inferCategoryAndIcon(rawName, container.Image);
       const custom = customOverrides.find((c) => c.id === container.Id) || {};
 
-      // 1. Strict Public Port Extraction
-      let publicPort = null;
+      let detectedPort = null;
 
+      // 1. Check mapped host PublicPort
       if (Array.isArray(container.Ports) && container.Ports.length > 0) {
-        // Find explicitly exposed host port
         const boundPort = container.Ports.find(
           (p) => p.PublicPort && p.PublicPort > 0,
         );
         if (boundPort) {
-          publicPort = boundPort.PublicPort;
+          detectedPort = boundPort.PublicPort;
+        } else {
+          // Fall back to reported private exposed port
+          const firstPrivate = container.Ports.find((p) => p.PrivatePort);
+          if (firstPrivate) detectedPort = firstPrivate.PrivatePort;
         }
       }
 
-      // 2. Determine target web URL
+      // 2. If container runs host mode or bridge without explicit bindings, match known app defaults
+      if (!detectedPort) {
+        for (const [key, knownPort] of Object.entries(WELL_KNOWN_PORTS)) {
+          if (cleanName.includes(key)) {
+            detectedPort = knownPort;
+            break;
+          }
+        }
+      }
+
+      // Skip non-interactive backend dependencies (e.g. database/redis/cron containers)
+      const isInternalBackend =
+        cleanName.includes("cron") ||
+        cleanName.includes("redis") ||
+        cleanName.includes("postgres") ||
+        cleanName.includes("db-") ||
+        cleanName.includes("machine_learning") ||
+        cleanName.includes("watchtower");
+
       let finalUrl = null;
       if (custom.url) {
         finalUrl = custom.url;
-      } else if (publicPort) {
-        finalUrl = `http://${clientHost}:${publicPort}`;
+      } else if (detectedPort && !isInternalBackend) {
+        finalUrl = `http://${clientHost}:${detectedPort}`;
       }
 
       return {
@@ -160,7 +200,7 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
         category: custom.category || meta.category,
         icon: custom.icon || meta.icon,
         iconUrl: custom.iconUrl || meta.iconUrl,
-        port: publicPort, // Directly pass explicit port to frontend
+        port: isInternalBackend ? null : detectedPort,
         url: finalUrl,
         image: container.Image,
         ports: container.Ports,
@@ -188,7 +228,7 @@ app.get("/api/telemetry", async (req, res) => {
     try {
       dockerContainers = await docker.listContainers({ all: false });
     } catch (e) {
-      // Docker socket fallback
+      // Fallback
     }
 
     const processList = dockerContainers
@@ -272,7 +312,6 @@ app.put("/api/services/:id", (req, res) => {
   }
 });
 
-// Catch-all route for Vite single-page application routing
 app.get("*", (req, res) => {
   const indexPath = path.join(distPath, "index.html");
   if (fs.existsSync(indexPath)) {
