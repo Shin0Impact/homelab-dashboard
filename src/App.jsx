@@ -6,17 +6,22 @@ import { Metrics } from "./components/Metrics"
 import { Sidebar, Topbar } from "./components/Navigation"
 import { Settings } from "./components/Settings"
 
+const PAGE_META = {
+  dashboard: { title: "Dashboard", subtitle: "Live Container Monitor" },
+  manage: { title: "Manage Services", subtitle: "Configure & Register Endpoints" },
+  metrics: { title: "System Telemetry", subtitle: "Host Resource Utilization" },
+  settings: { title: "Settings", subtitle: "Preferences & System Configuration" },
+}
+
 export default function App() {
   const [authed, setAuthed] = useState(() => {
     return localStorage.getItem("homelab_authed") === "true"
   })
 
-  // 1. Added missing page state
   const [page, setPage] = useState("dashboard")
   const [services, setServices] = useState([])
   const [categories, setCategories] = useState([])
 
-  // 2. Wrapped in useCallback & standardized name to fetchContainers
   const fetchContainers = useCallback(async () => {
     try {
       const res = await fetch("/api/containers")
@@ -92,11 +97,20 @@ export default function App() {
     return <Login onSignIn={handleLogin} />
   }
 
+  const meta = PAGE_META[page] || PAGE_META.dashboard
+
   return (
-    <div className="flex min-h-svh bg-background text-foreground">
+    <div className="flex min-h-svh w-full flex-col bg-background text-foreground md:flex-row">
+      {/* Handles desktop fixed sidebar + mobile header bar & slide-out drawer */}
       <Sidebar current={page} onNavigate={setPage} onLogout={handleLogout} />
-      <main className="flex min-w-0 flex-1 flex-col">
-        <Topbar title="Dashboard" subtitle="Live Container Monitor" />
+
+      <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
+        {/* Desktop Header */}
+        <div className="hidden md:block">
+          <Topbar title={meta.title} subtitle={meta.subtitle} />
+        </div>
+
+        {/* Dynamic Page Component */}
         <div className="flex-1 overflow-y-auto">
           {page === "dashboard" && (
             <Dashboard 

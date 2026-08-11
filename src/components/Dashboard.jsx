@@ -1,96 +1,82 @@
-import React, { useMemo, useState } from "react"
-import {
-  Activity,
-  Boxes,
-  ExternalLink,
-  HardDrive,
-  Loader2,
-  Play,
-  RefreshCw,
-  Search,
-  Square,
-  Wifi,
-} from "lucide-react"
+import React, { useState } from "react"
+import { Activity, Boxes, HardDrive, RefreshCw, Search, ExternalLink, Wifi } from "lucide-react"
 import { CategoryTag, ServiceIcon, StatusDot, glass } from "./UIHelpers"
 
-function MetricCard({ icon: Icon, label, value, hint, accent }) {
-  return (
-    <div className={`rounded-2xl p-5 ${glass}`}>
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">{label}</span>
-        <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${accent}`}>
-          <Icon className="h-4 w-4" />
-        </span>
-      </div>
-      <p className="mt-3 text-2xl font-semibold tracking-tight">{value}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
-    </div>
-  )
-}
-
-export function Dashboard({ services = [], categories = ["All", "AI", "Media", "Infra", "Network", "Automation"], onRefresh }) {
+export function Dashboard({ services = [], categories = [], onRefresh }) {
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState("All")
-  const [loadingAction, setLoadingAction] = useState(null)
 
-  const filterOptions = useMemo(() => {
-    return ["All", ...categories.filter((c) => c !== "All")]
-  }, [categories])
+  const totalContainers = services.length
+  const onlineCount = services.filter((s) => s.online).length
+  const offlineCount = totalContainers - onlineCount
 
-  // Filter out hidden services from dashboard view
-  const visibleServices = useMemo(() => {
-    return services.filter((s) => !s.hidden)
-  }, [services])
+  // Extract available categories
+  const filterOptions = ["All", ...new Set([...categories, ...services.map((s) => s.category).filter(Boolean)])]
 
-  const filtered = useMemo(() => {
-    return visibleServices.filter((s) => {
-      const matchesQuery = s.name.toLowerCase().includes(query.toLowerCase())
-      const matchesFilter = filter === "All" || s.category === filter
-      return matchesQuery && matchesFilter
-    })
-  }, [visibleServices, query, filter])
-
-  const online = visibleServices.filter((s) => s.online).length
-
-  const handleAction = async (id, action) => {
-    setLoadingAction(`${id}-${action}`)
-    try {
-      const res = await fetch(`/api/containers/${id}/${action}`, { method: "POST" })
-      const data = await res.json()
-      if (data.success && onRefresh) await onRefresh()
-    } catch (err) {
-      console.error(`Failed to ${action} container:`, err)
-    } finally {
-      setLoadingAction(null)
-    }
-  }
+  const filteredServices = services.filter((s) => {
+    if (s.hidden) return false
+    const matchesQuery = s.name.toLowerCase().includes(query.toLowerCase())
+    const matchesFilter = filter === "All" || s.category === filter
+    return matchesQuery && matchesFilter
+  })
 
   return (
-    <div className="space-y-8 p-8">
-      {/* Metric summary */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <MetricCard
-          icon={Boxes}
-          label="Total Containers"
-          value={String(visibleServices.length)}
-          hint="Discovered via Docker Socket"
-          accent="bg-chart-1/15 text-chart-1"
-        />
-        <MetricCard
-          icon={Activity}
-          label="Services Online"
-          value={`${online}`}
-          hint={`${visibleServices.length - online} offline`}
-          accent="bg-chart-2/15 text-chart-2"
-        />
-        <MetricCard icon={HardDrive} label="Storage" value="2.4 TB" hint="of 4 TB pool used" accent="bg-chart-4/15 text-chart-4" />
-        <MetricCard icon={Wifi} label="Tailscale" value="Connected" hint="4 devices in tailnet" accent="bg-chart-3/15 text-chart-3" />
+    <div className="w-full space-y-5 p-4 sm:p-6 md:p-8">
+      {/* 1. Stat Cards: 2 cols on mobile, 4 on desktop */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Total Containers */}
+        <div className={`rounded-xl p-4 ${glass}`}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground">Total Containers</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
+              <Boxes className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="mt-2 text-2xl font-bold">{totalContainers}</p>
+          <p className="text-[11px] text-muted-foreground">Discovered via Socket</p>
+        </div>
+
+        {/* Services Online */}
+        <div className={`rounded-xl p-4 ${glass}`}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground">Services Online</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400">
+              <Activity className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="mt-2 text-2xl font-bold">{onlineCount}</p>
+          <p className="text-[11px] text-muted-foreground">{offlineCount} offline</p>
+        </div>
+
+        {/* Storage */}
+        <div className={`rounded-xl p-4 ${glass}`}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground">Storage</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400">
+              <HardDrive className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="mt-2 text-2xl font-bold">2.4 TB</p>
+          <p className="text-[11px] text-muted-foreground">of 4 TB pool used</p>
+        </div>
+
+        {/* Tailscale */}
+        <div className={`rounded-xl p-4 ${glass}`}>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground">Tailscale</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/15 text-purple-400">
+              <Wifi className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="mt-2 text-xl font-bold">Connected</p>
+          <p className="text-[11px] text-muted-foreground">4 devices in tailnet</p>
+        </div>
       </div>
 
-      {/* Search & Dynamic Filter Tabs */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 sm:max-w-xs ${glass}`}>
-          <Search className="h-4 w-4 text-muted-foreground" />
+      {/* 2. Search Bar & Horizontal Category Scroll */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className={`flex items-center gap-2 rounded-xl px-3.5 py-2.5 sm:w-72 ${glass}`}>
+          <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -98,15 +84,17 @@ export function Dashboard({ services = [], categories = ["All", "AI", "Media", "
             className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
         </div>
-        <div className="flex flex-wrap gap-2">
+
+        {/* Horizontally Scrollable Categories (Hidden Scrollbar) */}
+        <div className="flex w-full items-center gap-2 overflow-x-auto pb-1 sm:w-auto sm:pb-0 [scrollbar-width:none]">
           {filterOptions.map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                 filter === f
-                  ? "border-primary/30 bg-primary/15 text-primary"
-                  : "border-white/5 bg-card/40 text-muted-foreground hover:text-foreground"
+                  ? "border-primary/40 bg-primary/20 text-primary"
+                  : "border-white/5 bg-secondary/30 text-muted-foreground hover:text-foreground"
               }`}
             >
               {f}
@@ -115,83 +103,71 @@ export function Dashboard({ services = [], categories = ["All", "AI", "Media", "
         </div>
       </div>
 
-      {/* Service Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {filtered.map((s) => {
-          const isActionBusy = loadingAction?.startsWith(s.id)
-          const launchUrl = s.port || s.url?.includes("http")
-            ? s.port 
-              ? `${window.location.protocol}//${window.location.hostname}:${s.port}` 
-              : s.url 
-            : null;
+      {/* 3. Responsive Container Grid */}
+      <div className="grid grid-cols-1 gap-3.5 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {filteredServices.map((s) => {
+          const computedUrl = s.port
+            ? `${window.location.protocol}//${window.location.hostname}:${s.port}`
+            : s.url
 
           return (
-            <div key={s.id} className={`group flex flex-col justify-between rounded-2xl p-5 transition-colors hover:bg-card/80 ${glass}`}>
+            <div key={s.id} className={`flex flex-col justify-between rounded-2xl p-4 transition-all hover:bg-secondary/20 ${glass}`}>
               <div>
-                <div className="flex items-start justify-between">
-                  {/* Container stays 12x12 (48px), Icon scale expanded to fill it */}
-                  <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-secondary/70 overflow-hidden text-foreground ring-1 ring-white/5">
-                    <ServiceIcon service={s} className="h-10 w-10" />
-                  </span>
-                  <div className="flex items-center gap-1.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary/80 ring-1 ring-white/5">
+                    <ServiceIcon service={s} className="h-6 w-6" />
+                  </div>
+                  <div className="flex items-center gap-1.5 rounded-full bg-secondary/50 px-2.5 py-1">
                     <StatusDot online={s.online} />
-                    <span className="text-xs text-muted-foreground capitalize">{s.status}</span>
+                    <span className="text-[11px] font-medium">{s.online ? "Running" : "Exited"}</span>
                   </div>
                 </div>
-                <p className="mt-4 font-medium truncate" title={s.name}>{s.name}</p>
-                <div className="mt-1.5 flex items-center justify-between">
-                  <CategoryTag category={s.category} />
-                  <span className="text-[10px] text-muted-foreground truncate max-w-[120px]" title={s.image}>
-                    {s.image?.split('/')[s.image?.split('/').length - 1]}
-                  </span>
+
+                <div className="mt-3">
+                  <h3 className="truncate text-base font-semibold">{s.name}</h3>
+                  <div className="mt-1 flex items-center gap-2">
+                    <CategoryTag category={s.category} />
+                    <span className="truncate font-mono text-[11px] text-muted-foreground">
+                      {s.image || (s.port ? `:${s.port}` : "")}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="mt-6 flex items-center gap-2">
-                {s.online ? (
-                  <>
-                    <button
-                      onClick={() => handleAction(s.id, "stop")}
-                      disabled={isActionBusy}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/60 text-muted-foreground hover:bg-red-500/20 hover:text-red-400 transition-colors disabled:opacity-50"
-                    >
-                      {loadingAction === `${s.id}-stop` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="h-4 w-4 fill-current" />}
-                    </button>
-                    <button
-                      onClick={() => handleAction(s.id, "restart")}
-                      disabled={isActionBusy}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/60 text-muted-foreground hover:bg-amber-500/20 hover:text-amber-400 transition-colors disabled:opacity-50"
-                    >
-                      {loadingAction === `${s.id}-restart` ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => handleAction(s.id, "start")}
-                    disabled={isActionBusy}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/60 text-muted-foreground hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors disabled:opacity-50"
+              {/* Action Buttons */}
+              <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-3">
+                <button
+                  onClick={onRefresh}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/40 text-muted-foreground hover:text-foreground"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </button>
+
+                {computedUrl ? (
+                  <a
+                    href={computedUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2 rounded-xl bg-primary/15 px-4 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/25"
                   >
-                    {loadingAction === `${s.id}-start` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
+                    Launch
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                ) : (
+                  <button disabled className="rounded-xl bg-secondary/30 px-4 py-2 text-xs font-medium text-muted-foreground/50">
+                    No Port
                   </button>
                 )}
-
-                <a
-                  href={launchUrl || "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors ${
-                    s.online && launchUrl
-                      ? "bg-secondary/60 text-foreground hover:bg-primary/15 hover:text-primary"
-                      : "pointer-events-none bg-secondary/20 text-muted-foreground/40"
-                  }`}
-                >
-                  Launch
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </a>
               </div>
             </div>
           )
         })}
+
+        {filteredServices.length === 0 && (
+          <div className={`col-span-full py-12 text-center text-sm text-muted-foreground ${glass} rounded-2xl`}>
+            No matching services found.
+          </div>
+        )}
       </div>
     </div>
   )
