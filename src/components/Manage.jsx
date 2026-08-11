@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { Container, Pencil, Plus, Trash2, X } from "lucide-react"
+import { Container, Eye, EyeOff, Pencil, Plus, Trash2, X } from "lucide-react"
 import { ICONS, CategoryTag, ServiceIcon, StatusDot, glass } from "./UIHelpers"
 
 const ICON_OPTIONS = ["container", "image", "cctv", "shield", "workflow", "bot", "music", "search", "download", "video"]
@@ -30,6 +30,7 @@ function ServiceModal({ initial, onClose, onSave }) {
       category,
       icon,
       online: initial?.online ?? true,
+      hidden: initial?.hidden ?? false,
       isCustom: true,
     })
   }
@@ -137,6 +138,12 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
     setModalOpen(false)
   }
 
+  function handleToggleHide(s) {
+    if (onUpdate) {
+      onUpdate({ ...s, hidden: !s.hidden })
+    }
+  }
+
   return (
     <div className="space-y-6 p-8">
       <div className="flex items-center justify-between">
@@ -158,6 +165,7 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
               <th className="px-5 py-3 font-medium">Local URL / Port</th>
               <th className="px-5 py-3 font-medium">Category</th>
               <th className="px-5 py-3 font-medium">Status</th>
+              <th className="px-5 py-3 font-medium">Visibility</th>
               <th className="px-5 py-3 text-right font-medium">Actions</th>
             </tr>
           </thead>
@@ -168,7 +176,7 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
                 : s.url || "No exposed port"
 
               return (
-                <tr key={s.id} className="border-b border-white/5 last:border-0 hover:bg-secondary/30">
+                <tr key={s.id} className={`border-b border-white/5 last:border-0 hover:bg-secondary/30 ${s.hidden ? "opacity-60" : ""}`}>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-3">
                       <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary/70 ring-1 ring-white/5">
@@ -188,7 +196,23 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
                     </div>
                   </td>
                   <td className="px-5 py-3">
+                    <span className={`text-xs font-medium ${s.hidden ? "text-amber-400/80" : "text-muted-foreground"}`}>
+                      {s.hidden ? "Hidden" : "Visible"}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => handleToggleHide(s)}
+                        title={s.hidden ? "Show in Dashboard" : "Hide from Dashboard"}
+                        className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                          s.hidden
+                            ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+                            : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+                        }`}
+                      >
+                        {s.hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
                       <button
                         onClick={() => openEdit(s)}
                         className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
@@ -208,7 +232,7 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
             })}
             {services.length === 0 && (
               <tr>
-                <td colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                <td colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
                   No services registered or discovered.
                 </td>
               </tr>

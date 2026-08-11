@@ -37,15 +37,20 @@ export function Dashboard({ services = [], categories = ["All", "AI", "Media", "
     return ["All", ...categories.filter((c) => c !== "All")]
   }, [categories])
 
+  // Filter out hidden services from dashboard view
+  const visibleServices = useMemo(() => {
+    return services.filter((s) => !s.hidden)
+  }, [services])
+
   const filtered = useMemo(() => {
-    return services.filter((s) => {
+    return visibleServices.filter((s) => {
       const matchesQuery = s.name.toLowerCase().includes(query.toLowerCase())
       const matchesFilter = filter === "All" || s.category === filter
       return matchesQuery && matchesFilter
     })
-  }, [services, query, filter])
+  }, [visibleServices, query, filter])
 
-  const online = services.filter((s) => s.online).length
+  const online = visibleServices.filter((s) => s.online).length
 
   const handleAction = async (id, action) => {
     setLoadingAction(`${id}-${action}`)
@@ -67,7 +72,7 @@ export function Dashboard({ services = [], categories = ["All", "AI", "Media", "
         <MetricCard
           icon={Boxes}
           label="Total Containers"
-          value={String(services.length)}
+          value={String(visibleServices.length)}
           hint="Discovered via Docker Socket"
           accent="bg-chart-1/15 text-chart-1"
         />
@@ -75,7 +80,7 @@ export function Dashboard({ services = [], categories = ["All", "AI", "Media", "
           icon={Activity}
           label="Services Online"
           value={`${online}`}
-          hint={`${services.length - online} offline`}
+          hint={`${visibleServices.length - online} offline`}
           accent="bg-chart-2/15 text-chart-2"
         />
         <MetricCard icon={HardDrive} label="Storage" value="2.4 TB" hint="of 4 TB pool used" accent="bg-chart-4/15 text-chart-4" />

@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import Docker from "dockerode";
-import si from "systeminformation";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -40,33 +39,40 @@ const docker = new Docker(
 app.use(cors());
 app.use(express.json());
 
-// Smart Name Cleaner & Icon/Category Inferencer
+// Advanced Container & Image Icon Matcher
 function inferCategoryAndIcon(rawName, image = "") {
-  const fullText = `${rawName} ${image}`.toLowerCase();
+  const nameLower = rawName.toLowerCase();
+  const imageLower = image.toLowerCase();
+  const fullText = `${nameLower} ${imageLower}`;
 
-  // 1. Strip common prefixes (big-bear-, docker-, etc.) and trailing suffixes
-  let cleanKey = rawName
-    .toLowerCase()
-    .replace(/^(big-bear|docker|my|local)[-_]/, "")
-    .replace(/[-_](server|app|container|service)$/, "");
+  let iconName = "";
 
-  // 2. Specific key mapping for CDN quirks
-  const iconOverrides = {
-    homeassistant: "home-assistant",
-    "home-assistant": "home-assistant",
-    searx: "searxng",
-    searxng: "searxng",
-    "searx-ng": "searxng",
-    "portainer-ce": "portainer",
-    vaultwarden: "bitwarden",
-  };
-
-  // Check if we have an explicit override mapping
-  let iconName = iconOverrides[cleanKey];
-
-  if (!iconName) {
-    // Default strategy: strip hyphens/underscores for standard flat filenames
-    iconName = cleanKey.replace(/[-_]/g, "");
+  // Explicit mappings based on container/image contents seen in your dashboard
+  if (fullText.includes("open-webui") || fullText.includes("openwebui"))
+    iconName = "open-webui";
+  else if (fullText.includes("adguard")) iconName = "adguard-home";
+  else if (fullText.includes("uptime-kuma") || fullText.includes("uptime_kuma"))
+    iconName = "uptime-kuma";
+  else if (
+    fullText.includes("home-assistant") ||
+    fullText.includes("homeassistant")
+  )
+    iconName = "home-assistant";
+  else if (fullText.includes("nextcloud")) iconName = "nextcloud";
+  else if (fullText.includes("immich")) iconName = "immich";
+  else if (fullText.includes("frigate")) iconName = "frigate";
+  else if (fullText.includes("navidrome")) iconName = "navidrome";
+  else if (fullText.includes("mosquitto")) iconName = "mosquitto";
+  else if (fullText.includes("redis") || fullText.includes("valkey"))
+    iconName = "redis";
+  else if (fullText.includes("postgres")) iconName = "postgresql";
+  else if (fullText.includes("lidarr")) iconName = "lidarr";
+  else {
+    // Fallback cleanup strategy
+    let clean = nameLower
+      .replace(/^(big-bear|docker|my|local)[-_]/, "")
+      .replace(/[-_](main|app|server|container|service|1|2|3)$/g, "");
+    iconName = clean.replace(/[-_]/g, "");
   }
 
   const dashboardIconBase =
@@ -76,38 +82,31 @@ function inferCategoryAndIcon(rawName, image = "") {
   let fallbackIcon = "container";
 
   if (
-    fullText.includes("chroma") ||
+    fullText.includes("open-webui") ||
     fullText.includes("ollama") ||
     fullText.includes("ai")
   ) {
     category = "AI";
     fallbackIcon = "bot";
-  } else if (
-    fullText.includes("navidrome") ||
-    fullText.includes("lidarr") ||
-    fullText.includes("deemix") ||
-    fullText.includes("plex") ||
-    fullText.includes("jellyfin")
-  ) {
+  } else if (fullText.includes("navidrome") || fullText.includes("lidarr")) {
     category = "Media";
     fallbackIcon = "music";
   } else if (
-    fullText.includes("searx") ||
-    fullText.includes("ntfy") ||
-    fullText.includes("assistant") ||
-    fullText.includes("palgate") ||
-    fullText.includes("wled")
+    fullText.includes("home-assistant") ||
+    fullText.includes("mosquitto")
   ) {
     category = "Automation";
     fallbackIcon = "workflow";
   }
 
-  const iconUrl = `${dashboardIconBase}/${iconName}.png`;
-
-  return { category, icon: fallbackIcon, iconUrl };
+  return {
+    category,
+    icon: fallbackIcon,
+    iconUrl: `${dashboardIconBase}/${iconName}.png`,
+  };
 }
 
-// 1. DOCKER DISCOVERY + CUSTOM MERGE + DYNAMIC CATEGORIES
+// 1. DOCKER DISCOVERY + CUSTOM MERGE + VISIBILITY FILTER
 app.get("/api/containers", async (req, res) => {
   try {
     const custom = getCustomServices();
@@ -145,6 +144,7 @@ app.get("/api/containers", async (req, res) => {
         icon: override?.icon || icon,
         iconUrl: override?.iconUrl || inferred.iconUrl,
         image: c.Image,
+        hidden: override?.hidden === true, // Carry over hide state
         isCustom: false,
       };
     });
@@ -165,13 +165,14 @@ app.get("/api/containers", async (req, res) => {
           status: item.online !== false ? "running" : "exited",
           online: item.online !== false,
           iconUrl: item.iconUrl || inferred.iconUrl,
+          hidden: item.hidden === true,
           isCustom: true,
         };
       });
 
     const allServices = [...formattedDocker, ...customOnly];
 
-    // Collect all dynamic categories present across services + defaults
+    // Build unique list of categories
     const defaultCategories = ["AI", "Media", "Infra", "Network", "Automation"];
     const detectedCategories = Array.from(
       new Set([
@@ -191,22 +192,7 @@ app.get("/api/containers", async (req, res) => {
   }
 });
 
-// CRUD & Helper Routes remain standard...
-app.post("/api/services", (req, res) => {
-  try {
-    const custom = getCustomServices();
-    const newService = {
-      ...req.body,
-      id: req.body.id || `custom-${Date.now()}`,
-    };
-    custom.push(newService);
-    saveCustomServices(custom);
-    res.json({ success: true, service: newService });
-  } catch {
-    res.status(500).json({ error: "Failed to save service" });
-  }
-});
-
+// Update endpoint (saves persistent edits like hidden status)
 app.put("/api/services/:id", (req, res) => {
   try {
     let custom = getCustomServices();
@@ -226,25 +212,5 @@ app.put("/api/services/:id", (req, res) => {
   }
 });
 
-app.delete("/api/services/:id", (req, res) => {
-  try {
-    let custom = getCustomServices();
-    custom = custom.filter((s) => s.id !== req.params.id);
-    saveCustomServices(custom);
-    res.json({ success: true });
-  } catch {
-    res.status(500).json({ error: "Failed to delete service" });
-  }
-});
-
-const distPath = path.resolve(__dirname, "../dist");
-app.use(express.static(distPath));
-app.use((req, res) => {
-  if (req.path.startsWith("/api"))
-    return res.status(404).json({ error: "API route not found" });
-  res.sendFile(path.join(distPath, "index.html"));
-});
-
-app.listen(PORT, () =>
-  console.log(`Homelab Dashboard running on http://localhost:${PORT}`),
-);
+// Port listener
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
