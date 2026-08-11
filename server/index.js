@@ -44,14 +44,30 @@ app.use(express.json());
 function inferCategoryAndIcon(rawName, image = "") {
   const fullText = `${rawName} ${image}`.toLowerCase();
 
-  // 1. Lowercase and remove common prefixes (big-bear-, docker-, etc.) and suffixes
+  // 1. Strip common prefixes (big-bear-, docker-, etc.) and trailing suffixes
   let cleanKey = rawName
     .toLowerCase()
     .replace(/^(big-bear|docker|my|local)[-_]/, "")
     .replace(/[-_](server|app|container|service)$/, "");
 
-  // 2. Strip ALL hyphens and underscores so "searx-ng" -> "searxng" & "home-assistant" -> "homeassistant"
-  cleanKey = cleanKey.replace(/[-_]/g, "");
+  // 2. Specific key mapping for CDN quirks
+  const iconOverrides = {
+    homeassistant: "home-assistant",
+    "home-assistant": "home-assistant",
+    searx: "searxng",
+    searxng: "searxng",
+    "searx-ng": "searxng",
+    "portainer-ce": "portainer",
+    vaultwarden: "bitwarden",
+  };
+
+  // Check if we have an explicit override mapping
+  let iconName = iconOverrides[cleanKey];
+
+  if (!iconName) {
+    // Default strategy: strip hyphens/underscores for standard flat filenames
+    iconName = cleanKey.replace(/[-_]/g, "");
+  }
 
   const dashboardIconBase =
     "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png";
@@ -86,7 +102,7 @@ function inferCategoryAndIcon(rawName, image = "") {
     fallbackIcon = "workflow";
   }
 
-  const iconUrl = `${dashboardIconBase}/${cleanKey}.png`;
+  const iconUrl = `${dashboardIconBase}/${iconName}.png`;
 
   return { category, icon: fallbackIcon, iconUrl };
 }
