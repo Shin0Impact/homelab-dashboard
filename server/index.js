@@ -44,21 +44,14 @@ app.use(express.json());
 function inferCategoryAndIcon(rawName, image = "") {
   const fullText = `${rawName} ${image}`.toLowerCase();
 
-  // Strip prefixes like "big-bear-", "docker-", and suffixes like "-server", "-app"
+  // 1. Lowercase and remove common prefixes (big-bear-, docker-, etc.) and suffixes
   let cleanKey = rawName
     .toLowerCase()
     .replace(/^(big-bear|docker|my|local)[-_]/, "")
     .replace(/[-_](server|app|container|service)$/, "");
 
-  // Key replacements for known service variations
-  if (
-    cleanKey.includes("home-assistant") ||
-    cleanKey.includes("homeassistant")
-  ) {
-    cleanKey = "home-assistant";
-  } else if (cleanKey.includes("searx")) {
-    cleanKey = "searxng";
-  }
+  // 2. Strip ALL hyphens and underscores so "searx-ng" -> "searxng" & "home-assistant" -> "homeassistant"
+  cleanKey = cleanKey.replace(/[-_]/g, "");
 
   const dashboardIconBase =
     "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png";
