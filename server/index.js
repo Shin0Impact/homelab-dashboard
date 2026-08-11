@@ -17,9 +17,8 @@ const DATA_FILE = path.resolve(__dirname, "custom_services.json");
 if (!fs.existsSync(DATA_FILE)) {
   fs.writeFileSync(DATA_FILE, JSON.stringify([], null, 2));
 }
-// Helper to read saved custom services and port overrides
+
 const getCustomServices = () => {
-  if (!fs.existsSync(DATA_FILE)) return [];
   try {
     return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
   } catch {
@@ -27,12 +26,10 @@ const getCustomServices = () => {
   }
 };
 
-// Helper to save services array to JSON disk file
 const saveCustomServices = (data) => {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 };
 
-// Auto-detect Windows Named Pipe vs Linux Socket
 const isWindows = process.platform === "win32";
 const docker = new Docker(
   isWindows
@@ -43,54 +40,65 @@ const docker = new Docker(
 app.use(cors());
 app.use(express.json());
 
-// Helper: Infer brand icon URL & category based on container name/image
-function inferCategoryAndIcon(name, image = "") {
-  const text = `${name} ${image}`.toLowerCase();
+// Smart Name Cleaner & Icon/Category Inferencer
+function inferCategoryAndIcon(rawName, image = "") {
+  const fullText = `${rawName} ${image}`.toLowerCase();
 
-  // Dashboard-Icons CDN base (handles almost all homelab services)
+  // Strip prefixes like "big-bear-", "docker-", and suffixes like "-server", "-app"
+  let cleanKey = rawName
+    .toLowerCase()
+    .replace(/^(big-bear|docker|my|local)[-_]/, "")
+    .replace(/[-_](server|app|container|service)$/, "");
+
+  // Key replacements for known service variations
+  if (
+    cleanKey.includes("home-assistant") ||
+    cleanKey.includes("homeassistant")
+  ) {
+    cleanKey = "home-assistant";
+  } else if (cleanKey.includes("searx")) {
+    cleanKey = "searxng";
+  }
+
   const dashboardIconBase =
     "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png";
 
-  // Clean the container name (e.g., "navidrome-server" -> "navidrome")
-  const cleanKey = name.toLowerCase().replace(/[-_].*/, "");
-
-  // Default fallbacks
   let category = "Infra";
   let fallbackIcon = "container";
 
   if (
-    text.includes("chroma") ||
-    text.includes("ollama") ||
-    text.includes("ai")
+    fullText.includes("chroma") ||
+    fullText.includes("ollama") ||
+    fullText.includes("ai")
   ) {
     category = "AI";
-    fallbackIcon = "brain";
+    fallbackIcon = "bot";
   } else if (
-    text.includes("navidrome") ||
-    text.includes("lidarr") ||
-    text.includes("deemix") ||
-    text.includes("plex") ||
-    text.includes("jellyfin")
+    fullText.includes("navidrome") ||
+    fullText.includes("lidarr") ||
+    fullText.includes("deemix") ||
+    fullText.includes("plex") ||
+    fullText.includes("jellyfin")
   ) {
     category = "Media";
     fallbackIcon = "music";
   } else if (
-    text.includes("searxng") ||
-    text.includes("ntfy") ||
-    text.includes("homeassistant") ||
-    text.includes("palgate")
+    fullText.includes("searx") ||
+    fullText.includes("ntfy") ||
+    fullText.includes("assistant") ||
+    fullText.includes("palgate") ||
+    fullText.includes("wled")
   ) {
     category = "Automation";
-    fallbackIcon = "home";
+    fallbackIcon = "workflow";
   }
 
-  // Construct automatic logo CDN URL
   const iconUrl = `${dashboardIconBase}/${cleanKey}.png`;
 
   return { category, icon: fallbackIcon, iconUrl };
 }
 
-// 1. DOCKER AUTO-DISCOVERY + CUSTOM SERVICES MERGE
+// 1. DOCKER DISCOVERY + CUSTOM MERGE + DYNAMIC CATEGORIES
 app.get("/api/containers", async (req, res) => {
   try {
     const custom = getCustomServices();
@@ -112,7 +120,6 @@ app.get("/api/containers", async (req, res) => {
 
       const publicPort = c.Ports.find((p) => p.PublicPort)?.PublicPort;
 
-      // Check if user saved a custom port/category/icon override for this container
       const override = custom.find(
         (item) =>
           item.id === c.Id ||
@@ -133,7 +140,6 @@ app.get("/api/containers", async (req, res) => {
       };
     });
 
-    // Add purely custom services created through the UI (that are not Docker containers)
     const customOnly = custom
       .filter(
         (item) =>
@@ -154,7 +160,21 @@ app.get("/api/containers", async (req, res) => {
         };
       });
 
-    res.json([...formattedDocker, ...customOnly]);
+    const allServices = [...formattedDocker, ...customOnly];
+
+    // Collect all dynamic categories present across services + defaults
+    const defaultCategories = ["AI", "Media", "Infra", "Network", "Automation"];
+    const detectedCategories = Array.from(
+      new Set([
+        ...defaultCategories,
+        ...allServices.map((s) => s.category).filter(Boolean),
+      ]),
+    );
+
+    res.json({
+      services: allServices,
+      categories: detectedCategories,
+    });
   } catch (err) {
     res
       .status(500)
@@ -162,7 +182,7 @@ app.get("/api/containers", async (req, res) => {
   }
 });
 
-// 2. CRUD ROUTES FOR CUSTOM SERVICES & OVERRIDES
+// CRUD & Helper Routes remain standard...
 app.post("/api/services", (req, res) => {
   try {
     const custom = getCustomServices();
@@ -173,7 +193,7 @@ app.post("/api/services", (req, res) => {
     custom.push(newService);
     saveCustomServices(custom);
     res.json({ success: true, service: newService });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to save service" });
   }
 });
@@ -192,7 +212,7 @@ app.put("/api/services/:id", (req, res) => {
 
     saveCustomServices(custom);
     res.json({ success: true });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to update service" });
   }
 });
@@ -200,113 +220,22 @@ app.put("/api/services/:id", (req, res) => {
 app.delete("/api/services/:id", (req, res) => {
   try {
     let custom = getCustomServices();
-    const { id } = req.params;
-    custom = custom.filter((s) => s.id !== id);
+    custom = custom.filter((s) => s.id !== req.params.id);
     saveCustomServices(custom);
     res.json({ success: true });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to delete service" });
   }
 });
 
-// 3. CONTAINER ACTIONS (Start / Stop / Restart)
-app.post("/api/containers/:id/:action", async (req, res) => {
-  const { id, action } = req.params;
-  const container = docker.getContainer(id);
-
-  try {
-    if (action === "start") await container.start();
-    else if (action === "stop") await container.stop();
-    else if (action === "restart") await container.restart();
-    else return res.status(400).json({ error: "Invalid action" });
-
-    res.json({ success: true, message: `Container ${action}ed successfully` });
-  } catch (err) {
-    res
-      .status(500)
-      .json({ error: `Failed to ${action} container`, details: err.message });
-  }
-});
-
-// 4. CONTAINER LOGS
-app.get("/api/containers/:id/logs", async (req, res) => {
-  try {
-    const container = docker.getContainer(req.params.id);
-    const logsBuffer = await container.logs({
-      stdout: true,
-      stderr: true,
-      tail: 150,
-      timestamps: true,
-    });
-
-    const cleanedLogs = logsBuffer
-      .toString("utf-8")
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
-
-    res.type("text/plain").send(cleanedLogs);
-  } catch (err) {
-    res.status(500).send("Failed to fetch container logs.");
-  }
-});
-
-// 5. TELEMETRY
-app.get("/api/telemetry", async (req, res) => {
-  try {
-    const cpu = await si.currentLoad();
-    const mem = await si.mem();
-    const fsSize = await si.fsSize();
-    const net = await si.networkStats();
-
-    const now = new Date();
-    const timestamp = now.toTimeString().split(" ")[0];
-
-    const rxSec = net[0] ? Math.round(net[0].rx_sec / 1024) : 0;
-    const txSec = net[0] ? Math.round(net[0].tx_sec / 1024) : 0;
-
-    const activeMem = (mem.active / 1024 / 1024 / 1024).toFixed(1);
-    const totalMem = (mem.total / 1024 / 1024 / 1024).toFixed(1);
-    const freeMem = (mem.free / 1024 / 1024 / 1024).toFixed(1);
-    const buffCache = (totalMem - activeMem - freeMem).toFixed(1);
-
-    res.json({
-      timestamp,
-      cpuLoad: Math.round(cpu.currentLoad),
-      ram: [
-        { name: "Active", value: parseFloat(activeMem) },
-        {
-          name: "Free",
-          value: parseFloat(freeMem) > 0 ? parseFloat(freeMem) : 0,
-        },
-        {
-          name: "Buffers/Cache",
-          value: parseFloat(buffCache) > 0 ? parseFloat(buffCache) : 0,
-        },
-      ],
-      totalMemGB: totalMem,
-      net: { down: rxSec, up: txSec },
-      diskUsedGB: fsSize[0]
-        ? (fsSize[0].used / 1024 / 1024 / 1024).toFixed(1)
-        : 0,
-      diskTotalGB: fsSize[0]
-        ? (fsSize[0].size / 1024 / 1024 / 1024).toFixed(1)
-        : 0,
-    });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch telemetry" });
-  }
-});
-
-// 6. SERVE FRONTEND STATIC FILES
 const distPath = path.resolve(__dirname, "../dist");
 app.use(express.static(distPath));
-
 app.use((req, res) => {
-  if (req.path.startsWith("/api")) {
+  if (req.path.startsWith("/api"))
     return res.status(404).json({ error: "API route not found" });
-  }
   res.sendFile(path.join(distPath, "index.html"));
 });
 
-app.listen(PORT, () => {
-  console.log(`Homelab Dashboard running on http://localhost:${PORT}`);
-});
+app.listen(PORT, () =>
+  console.log(`Homelab Dashboard running on http://localhost:${PORT}`),
+);

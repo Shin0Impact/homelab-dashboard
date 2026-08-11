@@ -12,7 +12,6 @@ import {
   Workflow,
 } from "lucide-react";
 
-// 1. Export Icon Map First
 export const ICONS = {
   container: Container,
   image: ImageIcon,
@@ -37,8 +36,7 @@ export const CATEGORY_STYLES = {
 export const glass =
   "border border-white/5 bg-card/60 backdrop-blur-xl shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset]";
 
-// 2. Service Icon Component with Fallback Logic
-export function ServiceIcon({ service, className = "h-6 w-6" }) {
+export function ServiceIcon({ service, className = "h-9 w-9" }) {
   const [imgError, setImgError] = useState(false);
   const FallbackIcon = ICONS[service?.icon] || Container;
 
@@ -47,7 +45,7 @@ export function ServiceIcon({ service, className = "h-6 w-6" }) {
       <img
         src={service.iconUrl}
         alt={service.name}
-        className={`${className} object-contain`}
+        className={`${className} object-contain p-0.5`}
         onError={() => setImgError(true)}
       />
     );
@@ -75,7 +73,7 @@ export function CategoryTag({ category }) {
   return (
     <span
       className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${
-        CATEGORY_STYLES[category] || "bg-secondary text-foreground"
+        CATEGORY_STYLES[category] || "bg-secondary/80 text-foreground border-white/10"
       }`}
     >
       {category}

@@ -13,8 +13,6 @@ import {
 } from "lucide-react"
 import { CategoryTag, ServiceIcon, StatusDot, glass } from "./UIHelpers"
 
-const FILTERS = ["All", "AI", "Media", "Infra", "Network", "Automation"]
-
 function MetricCard({ icon: Icon, label, value, hint, accent }) {
   return (
     <div className={`rounded-2xl p-5 ${glass}`}>
@@ -30,10 +28,14 @@ function MetricCard({ icon: Icon, label, value, hint, accent }) {
   )
 }
 
-export function Dashboard({ services = [], onRefresh }) {
+export function Dashboard({ services = [], categories = ["All", "AI", "Media", "Infra", "Network", "Automation"], onRefresh }) {
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState("All")
   const [loadingAction, setLoadingAction] = useState(null)
+
+  const filterOptions = useMemo(() => {
+    return ["All", ...categories.filter((c) => c !== "All")]
+  }, [categories])
 
   const filtered = useMemo(() => {
     return services.filter((s) => {
@@ -45,17 +47,12 @@ export function Dashboard({ services = [], onRefresh }) {
 
   const online = services.filter((s) => s.online).length
 
-  // Trigger start / stop / restart container action
   const handleAction = async (id, action) => {
     setLoadingAction(`${id}-${action}`)
     try {
-      const res = await fetch(`/api/containers/${id}/${action}`, {
-        method: "POST",
-      })
+      const res = await fetch(`/api/containers/${id}/${action}`, { method: "POST" })
       const data = await res.json()
-      if (data.success && onRefresh) {
-        await onRefresh()
-      }
+      if (data.success && onRefresh) await onRefresh()
     } catch (err) {
       console.error(`Failed to ${action} container:`, err)
     } finally {
@@ -81,23 +78,11 @@ export function Dashboard({ services = [], onRefresh }) {
           hint={`${services.length - online} offline`}
           accent="bg-chart-2/15 text-chart-2"
         />
-        <MetricCard
-          icon={HardDrive}
-          label="Storage"
-          value="2.4 TB"
-          hint="of 4 TB pool used"
-          accent="bg-chart-4/15 text-chart-4"
-        />
-        <MetricCard
-          icon={Wifi}
-          label="Tailscale"
-          value="Connected"
-          hint="4 devices in tailnet"
-          accent="bg-chart-3/15 text-chart-3"
-        />
+        <MetricCard icon={HardDrive} label="Storage" value="2.4 TB" hint="of 4 TB pool used" accent="bg-chart-4/15 text-chart-4" />
+        <MetricCard icon={Wifi} label="Tailscale" value="Connected" hint="4 devices in tailnet" accent="bg-chart-3/15 text-chart-3" />
       </div>
 
-      {/* Search & filter */}
+      {/* Search & Dynamic Filter Tabs */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 sm:max-w-xs ${glass}`}>
           <Search className="h-4 w-4 text-muted-foreground" />
@@ -109,7 +94,7 @@ export function Dashboard({ services = [], onRefresh }) {
           />
         </div>
         <div className="flex flex-wrap gap-2">
-          {FILTERS.map((f) => (
+          {filterOptions.map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -125,12 +110,10 @@ export function Dashboard({ services = [], onRefresh }) {
         </div>
       </div>
 
-      {/* Service cards */}
+      {/* Service Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filtered.map((s) => {
           const isActionBusy = loadingAction?.startsWith(s.id)
-
-          // DYNAMIC LAUNCH URL CALCULATION
           const launchUrl = s.port || s.url?.includes("http")
             ? s.port 
               ? `${window.location.protocol}//${window.location.hostname}:${s.port}` 
@@ -141,8 +124,9 @@ export function Dashboard({ services = [], onRefresh }) {
             <div key={s.id} className={`group flex flex-col justify-between rounded-2xl p-5 transition-colors hover:bg-card/80 ${glass}`}>
               <div>
                 <div className="flex items-start justify-between">
-                  <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-secondary/70 text-foreground ring-1 ring-white/5">
-                    <ServiceIcon service={s} className="h-6 w-6" />
+                  {/* Container stays 12x12 (48px), Icon scale expanded to fill it */}
+                  <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-secondary/70 overflow-hidden text-foreground ring-1 ring-white/5">
+                    <ServiceIcon service={s} className="h-10 w-10" />
                   </span>
                   <div className="flex items-center gap-1.5">
                     <StatusDot online={s.online} />
@@ -158,14 +142,12 @@ export function Dashboard({ services = [], onRefresh }) {
                 </div>
               </div>
 
-              {/* Actions & Launch Button */}
               <div className="mt-6 flex items-center gap-2">
                 {s.online ? (
                   <>
                     <button
                       onClick={() => handleAction(s.id, "stop")}
                       disabled={isActionBusy}
-                      title="Stop container"
                       className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/60 text-muted-foreground hover:bg-red-500/20 hover:text-red-400 transition-colors disabled:opacity-50"
                     >
                       {loadingAction === `${s.id}-stop` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="h-4 w-4 fill-current" />}
@@ -173,7 +155,6 @@ export function Dashboard({ services = [], onRefresh }) {
                     <button
                       onClick={() => handleAction(s.id, "restart")}
                       disabled={isActionBusy}
-                      title="Restart container"
                       className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/60 text-muted-foreground hover:bg-amber-500/20 hover:text-amber-400 transition-colors disabled:opacity-50"
                     >
                       {loadingAction === `${s.id}-restart` ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -183,7 +164,6 @@ export function Dashboard({ services = [], onRefresh }) {
                   <button
                     onClick={() => handleAction(s.id, "start")}
                     disabled={isActionBusy}
-                    title="Start container"
                     className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/60 text-muted-foreground hover:bg-emerald-500/20 hover:text-emerald-400 transition-colors disabled:opacity-50"
                   >
                     {loadingAction === `${s.id}-start` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
@@ -207,11 +187,6 @@ export function Dashboard({ services = [], onRefresh }) {
             </div>
           )
         })}
-        {filtered.length === 0 && (
-          <div className="col-span-full rounded-2xl border border-dashed border-white/10 py-16 text-center text-sm text-muted-foreground">
-            No services match your filters.
-          </div>
-        )}
       </div>
     </div>
   )
