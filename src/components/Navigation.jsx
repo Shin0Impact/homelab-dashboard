@@ -18,7 +18,8 @@ import { StatusDot, glass } from "./UIHelpers"
 
 const NAV = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "manage", label: "Manage Services", icon: Boxes },
+  { key: "manage", label: "Manage Services", icon: Server },
+  { key: "manage-containers", label: "Manage Containers", icon: Boxes },
   { key: "metrics", label: "System Telemetry", icon: Activity },
   { key: "settings", label: "Settings", icon: SettingsIcon },
 ]
