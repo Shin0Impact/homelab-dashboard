@@ -1,6 +1,17 @@
 import React, { useMemo, useState } from "react"
-import { Activity, Boxes, Container, ExternalLink, HardDrive, Play, RefreshCw, Search, Square, Wifi, Loader2 } from "lucide-react"
-import { ICONS, CategoryTag, StatusDot, glass } from "./UIHelpers"
+import {
+  Activity,
+  Boxes,
+  ExternalLink,
+  HardDrive,
+  Loader2,
+  Play,
+  RefreshCw,
+  Search,
+  Square,
+  Wifi,
+} from "lucide-react"
+import { CategoryTag, ServiceIcon, StatusDot, glass } from "./UIHelpers"
 
 const FILTERS = ["All", "AI", "Media", "Infra", "Network", "Automation"]
 
@@ -117,7 +128,6 @@ export function Dashboard({ services = [], onRefresh }) {
       {/* Service cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filtered.map((s) => {
-          const Icon = ICONS[s.icon] || Container
           const isActionBusy = loadingAction?.startsWith(s.id)
 
           // DYNAMIC LAUNCH URL CALCULATION
@@ -132,7 +142,7 @@ export function Dashboard({ services = [], onRefresh }) {
               <div>
                 <div className="flex items-start justify-between">
                   <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-secondary/70 text-foreground ring-1 ring-white/5">
-                    <Icon className="h-6 w-6" />
+                    <ServiceIcon service={s} className="h-6 w-6" />
                   </span>
                   <div className="flex items-center gap-1.5">
                     <StatusDot online={s.online} />

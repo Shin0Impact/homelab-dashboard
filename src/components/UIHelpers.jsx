@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useState } from "react";
 import {
   Bot,
   Cctv,
@@ -10,8 +10,9 @@ import {
   ScanSearch,
   ShieldCheck,
   Workflow,
-} from "lucide-react"
+} from "lucide-react";
 
+// 1. Export Icon Map First
 export const ICONS = {
   container: Container,
   image: ImageIcon,
@@ -23,7 +24,7 @@ export const ICONS = {
   search: ScanSearch,
   download: Download,
   video: Clapperboard,
-}
+};
 
 export const CATEGORY_STYLES = {
   AI: "bg-chart-3/20 text-chart-3 border-chart-3/30",
@@ -31,10 +32,29 @@ export const CATEGORY_STYLES = {
   Infra: "bg-chart-1/20 text-chart-1 border-chart-1/30",
   Network: "bg-chart-2/20 text-chart-2 border-chart-2/30",
   Automation: "bg-chart-4/20 text-chart-4 border-chart-4/30",
-}
+};
 
 export const glass =
-  "border border-white/5 bg-card/60 backdrop-blur-xl shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset]"
+  "border border-white/5 bg-card/60 backdrop-blur-xl shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset]";
+
+// 2. Service Icon Component with Fallback Logic
+export function ServiceIcon({ service, className = "h-6 w-6" }) {
+  const [imgError, setImgError] = useState(false);
+  const FallbackIcon = ICONS[service?.icon] || Container;
+
+  if (service?.iconUrl && !imgError) {
+    return (
+      <img
+        src={service.iconUrl}
+        alt={service.name}
+        className={`${className} object-contain`}
+        onError={() => setImgError(true)}
+      />
+    );
+  }
+
+  return <FallbackIcon className={className} />;
+}
 
 export function StatusDot({ online }) {
   return (
@@ -48,7 +68,7 @@ export function StatusDot({ online }) {
         }`}
       />
     </span>
-  )
+  );
 }
 
 export function CategoryTag({ category }) {
@@ -60,5 +80,5 @@ export function CategoryTag({ category }) {
     >
       {category}
     </span>
-  )
+  );
 }

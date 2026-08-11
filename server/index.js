@@ -40,33 +40,51 @@ const docker = new Docker(
 app.use(cors());
 app.use(express.json());
 
-// Helper: Infer categories & icons based on container/image name
-function inferCategoryAndIcon(name, image) {
+// Helper: Infer brand icon URL & category based on container name/image
+function inferCategoryAndIcon(name, image = "") {
   const text = `${name} ${image}`.toLowerCase();
+
+  // Dashboard-Icons CDN base (handles almost all homelab services)
+  const dashboardIconBase =
+    "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png";
+
+  // Clean the container name (e.g., "navidrome-server" -> "navidrome")
+  const cleanKey = name.toLowerCase().replace(/[-_].*/, "");
+
+  // Default fallbacks
+  let category = "Infra";
+  let fallbackIcon = "container";
+
   if (
     text.includes("chroma") ||
     text.includes("ollama") ||
     text.includes("ai")
   ) {
-    return { category: "AI", icon: "brain" };
-  }
-  if (
+    category = "AI";
+    fallbackIcon = "brain";
+  } else if (
     text.includes("navidrome") ||
     text.includes("lidarr") ||
     text.includes("deemix") ||
     text.includes("plex") ||
     text.includes("jellyfin")
   ) {
-    return { category: "Media", icon: "music" };
-  }
-  if (
+    category = "Media";
+    fallbackIcon = "music";
+  } else if (
     text.includes("searxng") ||
     text.includes("ntfy") ||
-    text.includes("homeassistant")
+    text.includes("homeassistant") ||
+    text.includes("palgate")
   ) {
-    return { category: "Automation", icon: "home" };
+    category = "Automation";
+    fallbackIcon = "home";
   }
-  return { category: "Infra", icon: "container" };
+
+  // Construct automatic logo CDN URL
+  const iconUrl = `${dashboardIconBase}/${cleanKey}.png`;
+
+  return { category, icon: fallbackIcon, iconUrl };
 }
 
 // 1. DOCKER AUTO-DISCOVERY + CUSTOM SERVICES MERGE
@@ -106,6 +124,7 @@ app.get("/api/containers", async (req, res) => {
         port: override?.port !== undefined ? override.port : publicPort || null,
         category: override?.category || category,
         icon: override?.icon || icon,
+        iconUrl: override?.iconUrl || inferred.iconUrl,
         image: c.Image,
         isCustom: false,
       };
@@ -121,12 +140,16 @@ app.get("/api/containers", async (req, res) => {
               d.name.toLowerCase() === item.name.toLowerCase(),
           ),
       )
-      .map((item) => ({
-        ...item,
-        status: item.online !== false ? "running" : "exited",
-        online: item.online !== false,
-        isCustom: true,
-      }));
+      .map((item) => {
+        const inferred = inferCategoryAndIcon(item.name);
+        return {
+          ...item,
+          status: item.online !== false ? "running" : "exited",
+          online: item.online !== false,
+          iconUrl: item.iconUrl || inferred.iconUrl,
+          isCustom: true,
+        };
+      });
 
     res.json([...formattedDocker, ...customOnly]);
   } catch (err) {

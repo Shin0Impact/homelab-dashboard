@@ -1,6 +1,6 @@
 import React, { useState } from "react"
 import { Container, Pencil, Plus, Trash2, X } from "lucide-react"
-import { ICONS, CategoryTag, StatusDot, glass } from "./UIHelpers"
+import { ICONS, CategoryTag, ServiceIcon, StatusDot, glass } from "./UIHelpers"
 
 const ICON_OPTIONS = ["container", "image", "cctv", "shield", "workflow", "bot", "music", "search", "download", "video"]
 const CATEGORY_OPTIONS = ["AI", "Media", "Infra", "Network", "Automation"]
@@ -24,7 +24,6 @@ function ServiceModal({ initial, onClose, onSave }) {
     if (!name.trim()) return
 
     onSave({
-      // Preserve existing ID or tag with 'custom-' for new entries
       id: initial?.id ?? `custom-${Date.now()}`,
       name: name.trim(),
       port: port ? Number(port) : null,
@@ -77,7 +76,7 @@ function ServiceModal({ initial, onClose, onSave }) {
               ))}
             </select>
           </Field>
-          <Field label="Icon">
+          <Field label="Fallback Icon">
             <div className="flex flex-wrap gap-2">
               {ICON_OPTIONS.map((key) => {
                 const Icon = ICONS[key] || Container
@@ -164,7 +163,6 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
           </thead>
           <tbody>
             {services.map((s) => {
-              const Icon = ICONS[s.icon] || Container
               const computedUrl = s.port
                 ? `${window.location.protocol}//${window.location.hostname}:${s.port}`
                 : s.url || "No exposed port"
@@ -174,7 +172,7 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-3">
                       <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary/70 ring-1 ring-white/5">
-                        <Icon className="h-4 w-4" />
+                        <ServiceIcon service={s} className="h-4 w-4" />
                       </span>
                       <span className="font-medium">{s.name}</span>
                     </div>
