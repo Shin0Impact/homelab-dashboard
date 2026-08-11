@@ -39,7 +39,7 @@ const docker = new Docker(
 app.use(cors());
 app.use(express.json());
 
-// Serve static frontend files from Vite production build (../dist or ./dist)
+// Serve static frontend files from Vite production build
 const distPath = fs.existsSync(path.resolve(__dirname, "../dist"))
   ? path.resolve(__dirname, "../dist")
   : path.resolve(__dirname, "dist");
@@ -111,6 +111,54 @@ function inferCategoryAndIcon(rawName, image = "") {
   };
 }
 
+// -------------------------------------------------------------
+// Container & Service Listing Endpoint (Handles both endpoints)
+// -------------------------------------------------------------
+app.get(["/api/containers", "/api/services"], async (req, res) => {
+  res.setHeader("Content-Type", "application/json");
+
+  try {
+    const rawContainers = await docker.listContainers({ all: true });
+    const customOverrides = getCustomServices();
+
+    const services = rawContainers.map((container) => {
+      const rawName = container.Names[0]
+        ? container.Names[0].replace("/", "")
+        : "unnamed";
+      const meta = inferCategoryAndIcon(rawName, container.Image);
+      const custom = customOverrides.find((c) => c.id === container.Id) || {};
+
+      // Extract exposed port mapping if available
+      const primaryPort = container.Ports.find((p) => p.PublicPort);
+      const portString = primaryPort ? `:${primaryPort.PublicPort}` : "";
+
+      return {
+        id: container.Id,
+        name: custom.name || rawName,
+        status: container.State === "running" ? "online" : "offline",
+        state: container.State,
+        category: custom.category || meta.category,
+        icon: custom.icon || meta.icon,
+        iconUrl: custom.iconUrl || meta.iconUrl,
+        url:
+          custom.url || (primaryPort ? `http://localhost${portString}` : "#"),
+        image: container.Image,
+        ports: container.Ports,
+      };
+    });
+
+    res.json({
+      services,
+      totalContainers: services.length,
+      onlineCount: services.filter((s) => s.status === "online").length,
+    });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: "Failed to list containers", details: err.message });
+  }
+});
+
 // Telemetry & System Metrics Endpoint
 app.get("/api/telemetry", async (req, res) => {
   res.setHeader("Content-Type", "application/json");
@@ -123,14 +171,13 @@ app.get("/api/telemetry", async (req, res) => {
       // Docker socket fallback
     }
 
-    // Map container stats to process items for Task Manager
     const processList = dockerContainers.map((c) => {
       const cleanName = c.Names[0].replace("/", "");
       return {
         id: c.Id,
         name: cleanName,
         pid: c.Id.substring(0, 8),
-        cpu: (Math.random() * 5 + 0.5).toFixed(1), // Live sample percentage
+        cpu: (Math.random() * 5 + 0.5).toFixed(1),
         mem: `${Math.floor(Math.random() * 300 + 100)} MB`,
         status: c.State === "running" ? "running" : "stopped",
       };
