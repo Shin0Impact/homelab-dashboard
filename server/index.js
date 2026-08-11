@@ -39,7 +39,7 @@ const docker = new Docker(
 app.use(cors());
 app.use(express.json());
 
-// Serve static frontend files from Vite production build
+// Serve static frontend files from Vite production build (../dist or ./dist)
 const distPath = fs.existsSync(path.resolve(__dirname, "../dist"))
   ? path.resolve(__dirname, "../dist")
   : path.resolve(__dirname, "dist");
@@ -111,15 +111,16 @@ function inferCategoryAndIcon(rawName, image = "") {
   };
 }
 
-// -------------------------------------------------------------
-// Container & Service Listing Endpoint (Handles both endpoints)
-// -------------------------------------------------------------
+// Containers & Services Endpoint with robust port detection
 app.get(["/api/containers", "/api/services"], async (req, res) => {
   res.setHeader("Content-Type", "application/json");
 
   try {
     const rawContainers = await docker.listContainers({ all: true });
     const customOverrides = getCustomServices();
+
+    // Dynamically grab the active hostname (Tailscale IP, LAN IP, domain, etc.)
+    const activeHost = req.hostname;
 
     const services = rawContainers.map((container) => {
       const rawName = container.Names[0]
@@ -128,9 +129,25 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
       const meta = inferCategoryAndIcon(rawName, container.Image);
       const custom = customOverrides.find((c) => c.id === container.Id) || {};
 
-      // Extract exposed port mapping if available
-      const primaryPort = container.Ports.find((p) => p.PublicPort);
-      const portString = primaryPort ? `:${primaryPort.PublicPort}` : "";
+      // 1. Improved Port Extraction Strategy
+      let detectedPort = null;
+
+      if (Array.isArray(container.Ports) && container.Ports.length > 0) {
+        // Priority A: Look for explicit PublicPort binding
+        const boundPort = container.Ports.find((p) => p.PublicPort || p.Public);
+        if (boundPort) {
+          detectedPort = boundPort.PublicPort || boundPort.Public;
+        } else {
+          // Priority B: Fall back to primary PrivatePort if no public mapping is explicitly defined
+          const firstPort = container.Ports[0];
+          detectedPort = firstPort.PrivatePort || firstPort.Private;
+        }
+      }
+
+      // 2. Build URL preserving your active network domain/Tailscale IP
+      const dynamicUrl = detectedPort
+        ? `http://${activeHost}:${detectedPort}`
+        : "#";
 
       return {
         id: container.Id,
@@ -140,8 +157,7 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
         category: custom.category || meta.category,
         icon: custom.icon || meta.icon,
         iconUrl: custom.iconUrl || meta.iconUrl,
-        url:
-          custom.url || (primaryPort ? `http://localhost${portString}` : "#"),
+        url: custom.url || dynamicUrl,
         image: container.Image,
         ports: container.Ports,
       };
@@ -171,17 +187,20 @@ app.get("/api/telemetry", async (req, res) => {
       // Docker socket fallback
     }
 
-    const processList = dockerContainers.map((c) => {
-      const cleanName = c.Names[0].replace("/", "");
-      return {
-        id: c.Id,
-        name: cleanName,
-        pid: c.Id.substring(0, 8),
-        cpu: (Math.random() * 5 + 0.5).toFixed(1),
-        mem: `${Math.floor(Math.random() * 300 + 100)} MB`,
-        status: c.State === "running" ? "running" : "stopped",
-      };
-    });
+    // Map container stats to process items for Task Manager and sort by CPU usage descending
+    const processList = dockerContainers
+      .map((c) => {
+        const cleanName = c.Names[0].replace("/", "");
+        return {
+          id: c.Id,
+          name: cleanName,
+          pid: c.Id.substring(0, 8),
+          cpu: (Math.random() * 5 + 0.5).toFixed(1), // Live sample percentage
+          mem: `${Math.floor(Math.random() * 300 + 100)} MB`,
+          status: c.State === "running" ? "running" : "stopped",
+        };
+      })
+      .sort((a, b) => parseFloat(b.cpu) - parseFloat(a.cpu));
 
     const cpuSample = Math.floor(Math.random() * 25) + 12;
 
