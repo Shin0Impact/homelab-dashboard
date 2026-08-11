@@ -22,13 +22,16 @@ function ServiceModal({ initial, onClose, onSave }) {
 
   function handleSave() {
     if (!name.trim()) return
+
     onSave({
-      id: initial?.id ?? crypto.randomUUID(),
+      // Preserve existing ID or tag with 'custom-' for new entries
+      id: initial?.id ?? `custom-${Date.now()}`,
       name: name.trim(),
       port: port ? Number(port) : null,
       category,
       icon,
       online: initial?.online ?? true,
+      isCustom: true,
     })
   }
 

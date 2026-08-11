@@ -7,31 +7,23 @@ import { Sidebar, Topbar } from "./components/Navigation"
 import { Settings } from "./components/Settings"
 
 export default function App() {
-  // 1. Persist login state so it doesn't reset on error or refresh
   const [authed, setAuthed] = useState(() => {
     return localStorage.getItem("homelab_authed") === "true"
   })
-  
+
   const [page, setPage] = useState("dashboard")
   const [services, setServices] = useState([])
   const [loading, setLoading] = useState(false)
 
-  // 2. Robust container fetch with response validation
   const fetchContainers = useCallback(async () => {
     try {
       setLoading(true)
       const res = await fetch("/api/containers")
-      
-      if (!res.ok) {
-        console.error(`API returned error status: ${res.status}`)
-        return
-      }
+      if (!res.ok) return
 
       const data = await res.json()
       if (Array.isArray(data)) {
         setServices(data)
-      } else {
-        console.warn("API response was not an array:", data)
       }
     } catch (err) {
       console.error("Error connecting to backend API:", err)
@@ -40,14 +32,50 @@ export default function App() {
     }
   }, [])
 
-  // Poll real Docker socket status every 5 seconds when authed
   useEffect(() => {
     if (!authed) return
-
     fetchContainers()
     const interval = setInterval(fetchContainers, 5000)
     return () => clearInterval(interval)
   }, [authed, fetchContainers])
+
+  // CRUD API Handlers
+  const handleAddService = async (newService) => {
+    try {
+      await fetch("/api/services", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newService),
+      })
+      fetchContainers()
+    } catch (err) {
+      console.error("Failed to add service:", err)
+    }
+  }
+
+  const handleUpdateService = async (updatedService) => {
+    try {
+      await fetch(`/api/services/${updatedService.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedService),
+      })
+      fetchContainers()
+    } catch (err) {
+      console.error("Failed to update service:", err)
+    }
+  }
+
+  const handleDeleteService = async (id) => {
+    try {
+      await fetch(`/api/services/${id}`, {
+        method: "DELETE",
+      })
+      fetchContainers()
+    } catch (err) {
+      console.error("Failed to delete service:", err)
+    }
+  }
 
   const handleLogin = () => {
     localStorage.setItem("homelab_authed", "true")
@@ -73,7 +101,12 @@ export default function App() {
             <Dashboard services={services} onRefresh={fetchContainers} />
           )}
           {page === "manage" && (
-            <Manage services={services} onRefresh={fetchContainers} />
+            <Manage
+              services={services}
+              onAdd={handleAddService}
+              onUpdate={handleUpdateService}
+              onDelete={handleDeleteService}
+            />
           )}
           {page === "metrics" && <Metrics />}
           {page === "settings" && <Settings />}
