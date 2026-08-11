@@ -14,6 +14,9 @@ const PORT = process.env.PORT || 3333;
 
 const DATA_FILE = path.resolve(__dirname, "custom_services.json");
 
+if (!fs.existsSync(DATA_FILE)) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify([], null, 2));
+}
 // Helper to read saved custom services and port overrides
 const getCustomServices = () => {
   if (!fs.existsSync(DATA_FILE)) return [];
