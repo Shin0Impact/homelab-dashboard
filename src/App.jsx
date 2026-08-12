@@ -130,6 +130,7 @@ export default function App() {
           {page === "containers" && (
             <ContainerManagement
               services={services}
+              services={containersList}
               onRefresh={fetchContainers}
             />
           )}
