@@ -1,5 +1,7 @@
 import express from "express";
 import cors from "cors";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 import Docker from "dockerode";
 import path from "path";
 import fs from "fs";
@@ -11,7 +13,10 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3333;
+const JWT_SECRET =
+  process.env.JWT_SECRET || "homelab-super-secret-key-change-me";
 
+// --- Custom Services Storage Setup ---
 const DATA_FILE = path.resolve(__dirname, "custom_services.json");
 
 if (!fs.existsSync(DATA_FILE)) {
@@ -30,6 +35,7 @@ const saveCustomServices = (data) => {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 };
 
+// --- Dockerode Initialization ---
 const isWindows = process.platform === "win32";
 const docker = new Docker(
   isWindows
@@ -40,13 +46,131 @@ const docker = new Docker(
 app.use(cors());
 app.use(express.json());
 
+// --- Static Frontend Serving ---
 const distPath = fs.existsSync(path.resolve(__dirname, "../dist"))
   ? path.resolve(__dirname, "../dist")
   : path.resolve(__dirname, "dist");
 
 app.use(express.static(distPath));
 
-// Known default web UI ports for common self-hosted applications
+// --- In-Memory Users & Auth Middleware ---
+const ADMIN_HASH = bcrypt.hashSync("admin", 10);
+
+let users = [
+  {
+    id: "1",
+    username: "admin",
+    passwordHash: ADMIN_HASH,
+    role: "Admin",
+  },
+];
+
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+
+  if (!token) return res.status(401).json({ message: "Access token required" });
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err)
+      return res.status(403).json({ message: "Invalid or expired token" });
+    req.user = user;
+    next();
+  });
+}
+
+function requireAdmin(req, res, next) {
+  if (req.user?.role !== "Admin") {
+    return res.status(403).json({ message: "Admin privileges required" });
+  }
+  next();
+}
+
+// --- Auth Endpoints ---
+
+// POST /api/login
+app.post("/api/login", async (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ message: "Username and password required" });
+  }
+
+  const user = users.find(
+    (u) => u.username.toLowerCase() === username.toLowerCase(),
+  );
+
+  if (!user) {
+    return res.status(401).json({ message: "Invalid username or password" });
+  }
+
+  const isMatch = await bcrypt.compare(password, user.passwordHash);
+
+  if (!isMatch) {
+    return res.status(401).json({ message: "Invalid username or password" });
+  }
+
+  const token = jwt.sign(
+    { id: user.id, username: user.username, role: user.role },
+    JWT_SECRET,
+    { expiresIn: "12h" },
+  );
+
+  res.json({
+    token,
+    user: { id: user.id, username: user.username, role: user.role },
+  });
+});
+
+// GET /api/users (Admin only)
+app.get("/api/users", authenticateToken, requireAdmin, (req, res) => {
+  const safeUsers = users.map(({ passwordHash, ...u }) => u);
+  res.json(safeUsers);
+});
+
+// POST /api/users (Admin only)
+app.post("/api/users", authenticateToken, requireAdmin, async (req, res) => {
+  const { username, password, role } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ message: "Username and password required" });
+  }
+
+  if (users.some((u) => u.username.toLowerCase() === username.toLowerCase())) {
+    return res.status(400).json({ message: "User already exists" });
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  const newUser = {
+    id: String(Date.now()),
+    username,
+    passwordHash,
+    role: role || "Viewer",
+  };
+
+  users.push(newUser);
+  res
+    .status(201)
+    .json({ id: newUser.id, username: newUser.username, role: newUser.role });
+});
+
+// DELETE /api/users/:id (Admin only)
+app.delete("/api/users/:id", authenticateToken, requireAdmin, (req, res) => {
+  const { id } = req.params;
+
+  const userToDelete = users.find((u) => u.id === id);
+  if (userToDelete?.username === "admin") {
+    return res
+      .status(403)
+      .json({ message: "Cannot delete primary admin account" });
+  }
+
+  users = users.filter((u) => u.id !== id);
+  res.json({ message: "User deleted" });
+});
+
+// --- Docker Container Management & Telemetry ---
+
 const WELL_KNOWN_PORTS = {
   "home-assistant": 8123,
   homeassistant: 8123,
@@ -131,7 +255,6 @@ function inferCategoryAndIcon(rawName, image = "") {
   };
 }
 
-// Containers & Services Endpoint
 app.get(["/api/containers", "/api/services"], async (req, res) => {
   res.setHeader("Content-Type", "application/json");
 
@@ -228,7 +351,7 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
   }
 });
 
-// --- GLOBAL SYSTEM TELEMETRY POLLER ---
+// Telemetry Logic
 function getCpuUsage() {
   const cpus = os.cpus();
   let user = 0,
@@ -261,14 +384,12 @@ setInterval(() => {
   );
 }, 2000);
 
-// Telemetry & System Metrics Endpoint
 app.get("/api/telemetry", async (req, res) => {
   res.setHeader("Content-Type", "application/json");
 
   try {
     const cpuPercent = currentCpuPercent;
 
-    // 1. Host Memory
     const totalMemBytes = os.totalmem();
     const freeMemBytes = os.freemem();
     const totalMemGB = parseFloat((totalMemBytes / 1024 ** 3).toFixed(1));
@@ -280,7 +401,6 @@ app.get("/api/telemetry", async (req, res) => {
       { name: "Free RAM", value: freeMemGB, fill: "#22c55e" },
     ];
 
-    // 2. Fetch Running Containers
     let dockerContainers = [];
     try {
       dockerContainers = await docker.listContainers({ all: false });
@@ -288,7 +408,6 @@ app.get("/api/telemetry", async (req, res) => {
       console.error("Docker list error:", e.message);
     }
 
-    // 3. Fetch Real Container Stats
     const processList = await Promise.all(
       dockerContainers.map(async (c) => {
         const name = c.Names[0] ? c.Names[0].replace("/", "") : "unnamed";
@@ -305,10 +424,6 @@ app.get("/api/telemetry", async (req, res) => {
           const systemDelta =
             stats.cpu_stats.system_cpu_usage -
             stats.precpu_stats.system_cpu_usage;
-          const numCpus =
-            stats.cpu_stats.online_cpus ||
-            stats.cpu_stats.cpu_usage.percpu_usage?.length ||
-            1;
 
           if (systemDelta > 0 && cpuDelta > 0) {
             containerCpu = parseFloat(
@@ -335,11 +450,8 @@ app.get("/api/telemetry", async (req, res) => {
       }),
     );
 
-    // Multi-level Server Sorting: CPU first, Memory (MB) second
     processList.sort((a, b) => {
-      if (b.cpu !== a.cpu) {
-        return b.cpu - a.cpu;
-      }
+      if (b.cpu !== a.cpu) return b.cpu - a.cpu;
       return b.memValue - a.memValue;
     });
 
@@ -367,7 +479,6 @@ app.get("/api/telemetry", async (req, res) => {
   }
 });
 
-// Container actions
 app.post("/api/containers/:id/:action", async (req, res) => {
   const { id, action } = req.params;
   try {
@@ -385,7 +496,6 @@ app.post("/api/containers/:id/:action", async (req, res) => {
   }
 });
 
-// Service update endpoint
 app.put("/api/services/:id", async (req, res) => {
   try {
     let custom = getCustomServices();
@@ -422,6 +532,7 @@ app.put("/api/services/:id", async (req, res) => {
   }
 });
 
+// Fallback to React App
 app.get("*", (req, res) => {
   const indexPath = path.join(distPath, "index.html");
   if (fs.existsSync(indexPath)) {

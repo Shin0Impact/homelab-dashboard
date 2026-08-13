@@ -1,10 +1,45 @@
 import React, { useState } from "react"
-import { ChevronRight, Lock, Server, Wifi } from "lucide-react"
-import { glass } from "./UIHelpers"
+import { ChevronRight, Lock, Server, User, Wifi } from "lucide-react"
+
+const glass =
+  "border border-white/5 bg-card/60 backdrop-blur-xl shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset]"
 
 export function Login({ onSignIn }) {
-  const [pin, setPin] = useState("")
+  const [username, setUsername] = useState("admin")
+  const [password, setPassword] = useState("")
   const [remember, setRemember] = useState(true)
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setError("")
+    setLoading(true)
+
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.message || "Authentication failed")
+      }
+
+      if (data.token) {
+        localStorage.setItem("homelab_token", data.token)
+        localStorage.setItem("homelab_user", JSON.stringify(data.user))
+        onSignIn(data)
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <div className="flex min-h-svh items-center justify-center bg-background p-4">
@@ -19,21 +54,37 @@ export function Login({ onSignIn }) {
           </p>
         </div>
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            onSignIn()
-          }}
-          className="mt-7 space-y-4"
-        >
+        {error && (
+          <div className="mt-4 rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-center text-xs text-destructive">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Password / PIN</label>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Username</label>
+            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-input/40 px-3 py-2.5 focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/20">
+              <User className="h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="admin"
+                className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Password</label>
             <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-input/40 px-3 py-2.5 focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/20">
               <Lock className="h-4 w-4 text-muted-foreground" />
               <input
                 type="password"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
@@ -52,9 +103,10 @@ export function Login({ onSignIn }) {
 
           <button
             type="submit"
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            disabled={loading}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
           >
-            Sign In to Server
+            {loading ? "Signing in..." : "Sign In to Server"}
             <ChevronRight className="h-4 w-4" />
           </button>
         </form>
