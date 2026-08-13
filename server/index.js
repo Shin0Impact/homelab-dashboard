@@ -3,6 +3,7 @@ import cors from "cors";
 import Docker from "dockerode";
 import path from "path";
 import fs from "fs";
+import os from "os";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -234,6 +235,24 @@ app.get("/api/telemetry", async (req, res) => {
   res.setHeader("Content-Type", "application/json");
 
   try {
+    // 1. Calculate Real System RAM
+    const totalMemBytes = os.totalmem();
+    const freeMemBytes = os.freemem();
+    const totalMemGB = (totalMemBytes / 1024 ** 3).toFixed(1);
+    const freeMemGB = parseFloat((freeMemBytes / 1024 ** 3).toFixed(1));
+    const usedMemGB = parseFloat((totalMemGB - freeMemGB).toFixed(1));
+
+    // 2. Real Host CPU Load Average
+    const loadAvg = os.loadavg()[0]; // 1 min load avg
+    const cpuCount = os.cpus().length;
+    const cpuPercent = Math.min(Math.round((loadAvg / cpuCount) * 100), 100);
+
+    // 3. Dynamic Memory Allocation breakdown (GB)
+    const ramBreakdown = [
+      { name: "Used RAM", value: usedMemGB, fill: "#a855f7" },
+      { name: "Free RAM", value: freeMemGB, fill: "#22c55e" },
+    ];
+
     let dockerContainers = [];
     try {
       dockerContainers = await docker.listContainers({ all: false });
@@ -241,21 +260,12 @@ app.get("/api/telemetry", async (req, res) => {
       // Fallback if socket fails
     }
 
-    const processList = dockerContainers
-      .map((c) => {
-        const cleanName = c.Names[0] ? c.Names[0].replace("/", "") : "unnamed";
-        return {
-          id: c.Id,
-          name: cleanName,
-          pid: c.Id.substring(0, 8),
-          cpu: (Math.random() * 5 + 0.5).toFixed(1),
-          mem: `${Math.floor(Math.random() * 300 + 100)} MB`,
-          status: c.State === "running" ? "running" : "stopped",
-        };
-      })
-      .sort((a, b) => parseFloat(b.cpu) - parseFloat(a.cpu));
-
-    const cpuSample = Math.floor(Math.random() * 25) + 12;
+    const processList = dockerContainers.map((c) => ({
+      id: c.Id,
+      name: c.Names[0] ? c.Names[0].replace("/", "") : "unnamed",
+      pid: c.Id.substring(0, 8),
+      status: c.State === "running" ? "running" : "stopped",
+    }));
 
     res.json({
       timestamp: new Date().toLocaleTimeString([], {
@@ -263,18 +273,11 @@ app.get("/api/telemetry", async (req, res) => {
         minute: "2-digit",
         second: "2-digit",
       }),
-      cpuLoad: cpuSample,
-      net: {
-        down: Math.floor(Math.random() * 800) + 150,
-        up: Math.floor(Math.random() * 250) + 40,
-      },
-      ram: [
-        { name: "System", value: 3.8 },
-        { name: "Containers", value: 7.2 },
-        { name: "Cache", value: 1.8 },
-        { name: "Free", value: 3.2 },
-      ],
-      totalMemGB: "16",
+      cpuLoad: cpuPercent || 15,
+      ram: ramBreakdown,
+      totalMemGB: totalMemGB,
+      usedMemGB: usedMemGB,
+      freeMemGB: freeMemGB,
       processes: processList,
     });
   } catch (err) {

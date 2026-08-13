@@ -3,11 +3,11 @@ import { Cpu, MemoryStick, Network, Play, RefreshCw, Square, Terminal } from "lu
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
+  Cell,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -173,16 +173,34 @@ export function Metrics() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Memory Allocation" subtitle={`${totalRam} GB total · GB per pool`} icon={MemoryStick}>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={ramData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-              <XAxis dataKey="name" stroke="#8e8e93" fontSize={11} tickLine={false} axisLine={false} />
-              <YAxis stroke="#8e8e93" fontSize={11} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
-              <Bar dataKey="value" fill={CHART_COLORS.memory} radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+        <ChartCard title="Memory Allocation" subtitle={`${totalRam} GB total · Memory breakdown`} icon={MemoryStick}>
+          <div className="flex h-[220px] w-full items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={ramData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                  paddingAngle={4}
+                  dataKey="value"
+                >
+                  {ramData.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={entry.fill || PIE_COLORS[index % PIE_COLORS.length]} 
+                      stroke="rgba(0,0,0,0.4)" 
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(val) => [`${val} GB`, "Memory"]}
+                  contentStyle={tooltipStyle}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
         </ChartCard>
       </div>
 
