@@ -16,10 +16,58 @@ import {
   ChevronRight,
 } from "lucide-react"
 
+// Navigation items config
+const NAV = [
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { key: "manage", label: "Manage", icon: Sliders },
+  { key: "stacks", label: "Stacks", icon: Layers },
+  { key: "metrics", label: "Metrics", icon: Activity },
+  { key: "settings", label: "Settings", icon: SettingsIcon },
+]
+
+// Common glassmorphism utility classes
+const glass =
+  "border border-white/5 bg-card/60 backdrop-blur-xl shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset]"
+
+// Status Dot Component
+export function StatusDot({ online = true }) {
+  return (
+    <span className="relative flex h-2 w-2">
+      {online && (
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-chart-2 opacity-75" />
+      )}
+      <span
+        className={`relative inline-flex h-2 w-2 rounded-full ${
+          online ? "bg-chart-2" : "bg-muted-foreground/40"
+        }`}
+      />
+    </span>
+  )
+}
+
+// Topbar Component
+export function Topbar({ title, subtitle }) {
+  return (
+    <header className="sticky top-0 z-20 flex h-16 w-full items-center justify-between border-b border-white/5 bg-background/80 px-6 backdrop-blur-md">
+      <div>
+        <h1 className="text-base font-semibold leading-none">{title}</h1>
+        {subtitle && (
+          <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
+        )}
+      </div>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <StatusDot online />
+        <span>System Online</span>
+      </div>
+    </header>
+  )
+}
+
+// Sidebar Component
 export function Sidebar({ user, current, onNavigate, onLogout }) {
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  // Network connection indicator state
+  // Dynamic network connection state
   const [networkState, setNetworkState] = useState({
     label: "Local System",
     statusText: "localhost",

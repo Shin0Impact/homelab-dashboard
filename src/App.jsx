@@ -34,7 +34,7 @@ export default function App() {
   const [services, setServices] = useState([])
   const [categories, setCategories] = useState([])
 
-  const theme = useSelector((state) => state.settings.theme || "default")
+  const theme = useSelector((state) => state.settings?.theme || "default")
 
   useEffect(() => {
     const root = document.documentElement
@@ -145,7 +145,7 @@ export default function App() {
   const handleLogin = (data) => {
     const token = typeof data === "object" ? data.token : data
     if (token) localStorage.setItem("homelab_token", token)
-    
+
     if (data?.user) {
       localStorage.setItem("homelab_user", JSON.stringify(data.user))
       setUser(data.user)
@@ -180,10 +180,10 @@ export default function App() {
 
         <div className="flex-1 overflow-y-auto">
           {page === "dashboard" && (
-            <Dashboard 
-              services={services} 
-              categories={categories} 
-              onRefresh={fetchContainers} 
+            <Dashboard
+              services={services}
+              categories={categories}
+              onRefresh={fetchContainers}
             />
           )}
           {page === "manage" && (
