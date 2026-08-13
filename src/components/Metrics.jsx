@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useMemo, useState } from "react"
+import { useSelector, useDispatch } from "react-redux"
+import { setTelemetryError, updateTelemetryData } from "../store/telemetrySlice"
 import {
   ArrowDown,
   ArrowUp,
@@ -63,15 +65,12 @@ function ChartCard({ title, subtitle, icon: Icon, children }) {
 }
 
 export function Metrics() {
-  const [cpuHistory, setCpuHistory] = useState([])
-  const [netHistory, setNetHistory] = useState([])
-  const [ramData, setRamData] = useState([
-    { name: "Used RAM", value: 0, fill: "#a855f7" },
-    { name: "Free RAM", value: 0, fill: "#22c55e" },
-  ])
-  const [totalRam, setTotalRam] = useState("0")
-  const [errorMsg, setErrorMsg] = useState(null)
-  const [processes, setProcesses] = useState([])
+  const dispatch = useDispatch()
+  
+  // Select telemetry directly from Redux Store
+  const { cpuHistory, netHistory, ramData, totalRam, processes, errorMsg } =
+    useSelector((state) => state.telemetry)
+
   const [sortConfig, setSortConfig] = useState({ key: "cpu", direction: "desc" })
 
   const getAuthHeaders = () => {
@@ -85,53 +84,12 @@ export function Metrics() {
         headers: getAuthHeaders(),
       })
       if (!res.ok) throw new Error("Telemetry request failed")
-
       const data = await res.json()
-      if (!data || data.error) return
-
-      setErrorMsg(null)
-      const timeStr =
-        data.timestamp ||
-        new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        })
-
-      if (data.cpuLoad !== undefined) {
-        setCpuHistory((prev) =>
-          [...prev, { t: timeStr, cpu: data.cpuLoad }].slice(-20)
-        )
-      }
-
-      if (data.net) {
-        setNetHistory((prev) =>
-          [
-            ...prev,
-            { t: timeStr, down: data.net.down || 0, up: data.net.up || 0 },
-          ].slice(-20)
-        )
-      }
-
-      if (data.ram) {
-        setRamData([...data.ram])
-        if (data.totalMemGB) setTotalRam(data.totalMemGB)
-      }
-
-      if (Array.isArray(data.processes)) {
-        setProcesses(data.processes)
-      }
+      dispatch(updateTelemetryData(data))
     } catch (err) {
-      console.warn("Telemetry fetch error:", err.message)
-      setErrorMsg("Telemetry endpoint unreachable.")
+      dispatch(setTelemetryError("Telemetry endpoint unreachable."))
     }
   }
-
-  useEffect(() => {
-    fetchMetrics()
-    const interval = setInterval(fetchMetrics, 2000)
-    return () => clearInterval(interval)
-  }, [])
 
   const handleToggleProcess = async (id) => {
     const proc = processes.find((p) => p.id === id)
@@ -156,7 +114,6 @@ export function Metrics() {
     }))
   }
 
-  // Client-side dynamic multi-column sorting
   const sortedProcesses = useMemo(() => {
     return [...processes].sort((a, b) => {
       let aVal = a[sortConfig.key]

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react"
+import { useDispatch } from "react-redux"
+import { updateTelemetryData, setTelemetryError } from "./store/telemetrySlice"
 import { Dashboard } from "./components/Dashboard"
 import { Login } from "./components/Login"
 import { Manage } from "./components/Manage"
@@ -16,6 +18,8 @@ const PAGE_META = {
 }
 
 export default function App() {
+  const dispatch = useDispatch()
+
   const [authed, setAuthed] = useState(() => {
     return localStorage.getItem("homelab_authed") === "true"
   })
@@ -24,10 +28,32 @@ export default function App() {
   const [services, setServices] = useState([])
   const [categories, setCategories] = useState([])
 
-  const getAuthHeaders = () => {
+  const getAuthHeaders = useCallback(() => {
     const token = localStorage.getItem("homelab_token")
     return token ? { Authorization: `Bearer ${token}` } : {}
-  }
+  }, [])
+
+  // Global Telemetry Polling Loop (Runs at App level so state never drops)
+  useEffect(() => {
+    if (!authed) return
+
+    const fetchTelemetry = async () => {
+      try {
+        const res = await fetch("/api/telemetry", {
+          headers: getAuthHeaders(),
+        })
+        if (!res.ok) throw new Error("Telemetry request failed")
+        const data = await res.json()
+        dispatch(updateTelemetryData(data))
+      } catch (err) {
+        dispatch(setTelemetryError("Telemetry endpoint unreachable."))
+      }
+    }
+
+    fetchTelemetry()
+    const interval = setInterval(fetchTelemetry, 2000)
+    return () => clearInterval(interval)
+  }, [authed, dispatch, getAuthHeaders])
 
   const fetchContainers = useCallback(async () => {
     try {
@@ -45,7 +71,7 @@ export default function App() {
     } catch (err) {
       console.error("Failed to load services:", err)
     }
-  }, [])
+  }, [getAuthHeaders])
 
   useEffect(() => {
     if (!authed) return
