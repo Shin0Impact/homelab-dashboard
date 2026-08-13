@@ -24,13 +24,18 @@ export default function App() {
     return localStorage.getItem("homelab_authed") === "true"
   })
 
+  // Load user data stored on login
+  const [user, setUser] = useState(() => {
+    const stored = localStorage.getItem("homelab_user")
+    return stored ? JSON.parse(stored) : null
+  })
+
   const [page, setPage] = useState("dashboard")
   const [services, setServices] = useState([])
   const [categories, setCategories] = useState([])
 
   const theme = useSelector((state) => state.settings.theme || "default")
 
-  // Sync active theme class onto html root element
   useEffect(() => {
     const root = document.documentElement
     root.classList.remove("amoled", "light")
@@ -47,7 +52,6 @@ export default function App() {
     return token ? { Authorization: `Bearer ${token}` } : {}
   }, [])
 
-  // Global Telemetry Polling Loop
   useEffect(() => {
     if (!authed) return
 
@@ -94,7 +98,6 @@ export default function App() {
     return () => clearInterval(interval)
   }, [authed, fetchContainers])
 
-  // CRUD API Handlers
   const handleAddService = async (newService) => {
     try {
       await fetch("/api/services", {
@@ -142,6 +145,12 @@ export default function App() {
   const handleLogin = (data) => {
     const token = typeof data === "object" ? data.token : data
     if (token) localStorage.setItem("homelab_token", token)
+    
+    if (data?.user) {
+      localStorage.setItem("homelab_user", JSON.stringify(data.user))
+      setUser(data.user)
+    }
+
     localStorage.setItem("homelab_authed", "true")
     setAuthed(true)
   }
@@ -149,6 +158,8 @@ export default function App() {
   const handleLogout = () => {
     localStorage.removeItem("homelab_authed")
     localStorage.removeItem("homelab_token")
+    localStorage.removeItem("homelab_user")
+    setUser(null)
     setAuthed(false)
   }
 
@@ -160,7 +171,7 @@ export default function App() {
 
   return (
     <div className="flex min-h-svh w-full flex-col bg-background text-foreground md:flex-row">
-      <Sidebar current={page} onNavigate={setPage} onLogout={handleLogout} />
+      <Sidebar user={user} current={page} onNavigate={setPage} onLogout={handleLogout} />
 
       <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
         <div className="hidden md:block">

@@ -1,37 +1,13 @@
-import React, { useState } from "react"
-import { Layers } from "lucide-react"
-import {
-  Activity,
-  Bell,
-  Boxes,
-  ChevronRight,
-  LayoutDashboard,
-  LogOut,
-  Menu,
-  RefreshCw,
-  Server,
-  Settings as SettingsIcon,
-  User,
-  Wifi,
-  X,
-} from "lucide-react"
-import { StatusDot, glass } from "./UIHelpers"
-
-const NAV = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "manage", label: "Manage Services", icon: Server },
-  { key: "stacks", label: "Docker Stacks", icon: Layers }, // Updated key and label
-  { key: "metrics", label: "System Telemetry", icon: Activity },
-  { key: "settings", label: "Settings", icon: SettingsIcon },
-]
-
-export function Sidebar({ current, onNavigate, onLogout }) {
+export function Sidebar({ user, current, onNavigate, onLogout }) {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const handleSelect = (key) => {
     onNavigate(key)
     setMobileOpen(false)
   }
+
+  const displayName = user?.name || user?.username || "admin"
+  const displayEmail = user?.email || `${user?.username || "root"}@homelab`
 
   return (
     <>
@@ -74,8 +50,8 @@ export function Sidebar({ current, onNavigate, onLogout }) {
                 <User className="h-4 w-4" />
               </div>
               <div className="min-w-0">
-                <p className="truncate text-xs font-medium">admin</p>
-                <p className="truncate text-[10px] text-muted-foreground">root@homelab</p>
+                <p className="truncate text-xs font-medium">{displayName}</p>
+                <p className="truncate text-[10px] text-muted-foreground">{displayEmail}</p>
               </div>
             </div>
 
@@ -138,8 +114,8 @@ export function Sidebar({ current, onNavigate, onLogout }) {
             <User className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">admin</p>
-            <p className="truncate text-xs text-muted-foreground">root@homelab</p>
+            <p className="truncate text-sm font-medium">{displayName}</p>
+            <p className="truncate text-xs text-muted-foreground">{displayEmail}</p>
           </div>
         </div>
 
@@ -184,24 +160,5 @@ export function Sidebar({ current, onNavigate, onLogout }) {
         </div>
       </aside>
     </>
-  )
-}
-
-export function Topbar({ title, subtitle }) {
-  return (
-    <header className="flex items-center justify-between border-b border-white/5 px-4 py-4 sm:px-8 sm:py-5">
-      <div>
-        <h1 className="text-lg font-semibold tracking-tight text-balance sm:text-xl">{title}</h1>
-        <p className="text-xs text-muted-foreground sm:text-sm">{subtitle}</p>
-      </div>
-      <div className="flex items-center gap-2">
-        <button className={`flex h-8 w-8 items-center justify-center rounded-lg ${glass} hover:bg-secondary/60 sm:h-9 sm:w-9`}>
-          <RefreshCw className="h-4 w-4 text-muted-foreground" />
-        </button>
-        <button className={`flex h-8 w-8 items-center justify-center rounded-lg ${glass} hover:bg-secondary/60 sm:h-9 sm:w-9`}>
-          <Bell className="h-4 w-4 text-muted-foreground" />
-        </button>
-      </div>
-    </header>
   )
 }
