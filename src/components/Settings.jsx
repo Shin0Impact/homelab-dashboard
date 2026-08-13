@@ -61,6 +61,25 @@ export function Settings() {
 
   const token = localStorage.getItem("homelab_token")
 
+  // Sync settings with Backend API
+  useEffect(() => {
+    async function loadBackendSettings() {
+      try {
+        const res = await fetch("/api/settings")
+        if (res.ok) {
+          const data = await res.json()
+          if (Array.isArray(data.categories)) setCategories(data.categories)
+          if (data.compact !== undefined) setCompact(data.compact)
+          if (data.amoled !== undefined) setAmoled(data.amoled)
+          if (data.refresh !== undefined) setRefresh(data.refresh)
+        }
+      } catch (err) {
+        console.error("Failed to load server settings", err)
+      }
+    }
+    loadBackendSettings()
+  }, [])
+
   useEffect(() => {
     localStorage.setItem("homelab_categories", JSON.stringify(categories))
     localStorage.setItem("homelab_compact", compact)
@@ -75,7 +94,19 @@ export function Settings() {
 
     window.dispatchEvent(new Event("homelab_settings_updated"))
     window.dispatchEvent(new Event("homelab_categories_updated"))
-  }, [categories, compact, amoled, refresh])
+
+    // Save update to server
+    if (token) {
+      fetch("/api/settings", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ categories, compact, amoled, refresh }),
+      }).catch((e) => console.error("Failed sync settings to server", e))
+    }
+  }, [categories, compact, amoled, refresh, token])
 
   const fetchUsers = async () => {
     if (!token) return

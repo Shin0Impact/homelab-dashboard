@@ -20,8 +20,10 @@ const PORT = process.env.PORT || 3333;
 const JWT_SECRET =
   process.env.JWT_SECRET || "homelab-super-secret-key-change-me";
 
-// --- Custom Services Storage Setup ---
+// --- Persistent Storage Setup ---
 const DATA_FILE = path.resolve(__dirname, "custom_services.json");
+const USERS_FILE = path.resolve(__dirname, "users.json");
+const SETTINGS_FILE = path.resolve(__dirname, "settings.json");
 const STACKS_DIR = path.resolve(__dirname, "stacks");
 
 if (!fs.existsSync(DATA_FILE)) {
@@ -32,6 +34,7 @@ if (!fs.existsSync(STACKS_DIR)) {
   fs.mkdirSync(STACKS_DIR, { recursive: true });
 }
 
+// Custom Services Helpers
 const getCustomServices = () => {
   try {
     return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
@@ -42,6 +45,58 @@ const getCustomServices = () => {
 
 const saveCustomServices = (data) => {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+};
+
+// Users File Helpers
+const getUsers = () => {
+  try {
+    if (!fs.existsSync(USERS_FILE)) {
+      const defaultUsers = [
+        {
+          id: "1",
+          username: "admin",
+          passwordHash: bcrypt.hashSync("admin", 10),
+          role: "Admin",
+        },
+      ];
+      fs.writeFileSync(USERS_FILE, JSON.stringify(defaultUsers, null, 2));
+      return defaultUsers;
+    }
+    return JSON.parse(fs.readFileSync(USERS_FILE, "utf-8"));
+  } catch {
+    return [];
+  }
+};
+
+const saveUsers = (usersData) => {
+  fs.writeFileSync(USERS_FILE, JSON.stringify(usersData, null, 2));
+};
+
+// UI Settings Helpers
+const DEFAULT_SETTINGS = {
+  categories: ["AI", "Media", "Infra", "Network", "Automation"],
+  compact: false,
+  amoled: false,
+  refresh: 10,
+};
+
+const getSettings = () => {
+  try {
+    if (!fs.existsSync(SETTINGS_FILE)) {
+      fs.writeFileSync(
+        SETTINGS_FILE,
+        JSON.stringify(DEFAULT_SETTINGS, null, 2),
+      );
+      return DEFAULT_SETTINGS;
+    }
+    return JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf-8"));
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+};
+
+const saveSettings = (settingsData) => {
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settingsData, null, 2));
 };
 
 // --- Dockerode Initialization ---
@@ -62,18 +117,7 @@ const distPath = fs.existsSync(path.resolve(__dirname, "../dist"))
 
 app.use(express.static(distPath));
 
-// --- In-Memory Users & Auth Middleware ---
-const ADMIN_HASH = bcrypt.hashSync("admin", 10);
-
-let users = [
-  {
-    id: "1",
-    username: "admin",
-    passwordHash: ADMIN_HASH,
-    role: "Admin",
-  },
-];
-
+// --- Auth Middleware ---
 function authenticateToken(req, res, next) {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
@@ -104,6 +148,7 @@ app.post("/api/login", async (req, res) => {
     return res.status(400).json({ message: "Username and password required" });
   }
 
+  const users = getUsers();
   const user = users.find(
     (u) => u.username.toLowerCase() === username.toLowerCase(),
   );
@@ -131,6 +176,7 @@ app.post("/api/login", async (req, res) => {
 });
 
 app.get("/api/users", authenticateToken, requireAdmin, (req, res) => {
+  const users = getUsers();
   const safeUsers = users.map(({ passwordHash, ...u }) => u);
   res.json(safeUsers);
 });
@@ -142,6 +188,7 @@ app.post("/api/users", authenticateToken, requireAdmin, async (req, res) => {
     return res.status(400).json({ message: "Username and password required" });
   }
 
+  const users = getUsers();
   if (users.some((u) => u.username.toLowerCase() === username.toLowerCase())) {
     return res.status(400).json({ message: "User already exists" });
   }
@@ -155,6 +202,7 @@ app.post("/api/users", authenticateToken, requireAdmin, async (req, res) => {
   };
 
   users.push(newUser);
+  saveUsers(users);
   res
     .status(201)
     .json({ id: newUser.id, username: newUser.username, role: newUser.role });
@@ -162,6 +210,7 @@ app.post("/api/users", authenticateToken, requireAdmin, async (req, res) => {
 
 app.delete("/api/users/:id", authenticateToken, requireAdmin, (req, res) => {
   const { id } = req.params;
+  let users = getUsers();
 
   const userToDelete = users.find((u) => u.id === id);
   if (userToDelete?.username === "admin") {
@@ -171,6 +220,7 @@ app.delete("/api/users/:id", authenticateToken, requireAdmin, (req, res) => {
   }
 
   users = users.filter((u) => u.id !== id);
+  saveUsers(users);
   res.json({ message: "User deleted" });
 });
 
@@ -186,18 +236,33 @@ app.put(
       return res.status(400).json({ message: "New password is required" });
     }
 
+    const users = getUsers();
     const targetUser = users.find((u) => u.id === id);
     if (!targetUser) {
       return res.status(404).json({ message: "User not found" });
     }
 
     targetUser.passwordHash = await bcrypt.hash(newPassword, 10);
+    saveUsers(users);
 
     res.json({
       message: `Password for user '${targetUser.username}' updated successfully.`,
     });
   },
 );
+
+// --- Server Settings Endpoints ---
+
+app.get("/api/settings", (req, res) => {
+  res.json(getSettings());
+});
+
+app.put("/api/settings", authenticateToken, (req, res) => {
+  const currentSettings = getSettings();
+  const updatedSettings = { ...currentSettings, ...req.body };
+  saveSettings(updatedSettings);
+  res.json({ success: true, settings: updatedSettings });
+});
 
 // --- Docker Container Management & Telemetry ---
 

@@ -23,4 +23,15 @@ dist-ssr
 *.sln
 *.sw?
 
+
+# Local Runtime & Persistent Data
 server/custom_services.json
+custom_services.json
+users.json
+stacks/
+*.db
+*.sqlite
+
+# Environment Configuration
+.env
+.env.local
