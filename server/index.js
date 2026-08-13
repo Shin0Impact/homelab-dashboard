@@ -312,7 +312,7 @@ app.get("/api/telemetry", async (req, res) => {
 
           if (systemDelta > 0 && cpuDelta > 0) {
             containerCpu = parseFloat(
-              ((cpuDelta / systemDelta) * numCpus * 100).toFixed(1),
+              ((cpuDelta / systemDelta) * 100).toFixed(1),
             );
           }
 
