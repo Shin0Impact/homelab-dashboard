@@ -1,44 +1,62 @@
 import React, { useState } from "react"
-import { Layers, Play, Square, RotateCw, FileCode, Plus, Search, ChevronRight, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react"
+import { Layers, Play, Square, FileCode, Plus, Search, AlertCircle, X } from "lucide-react"
 
 const glassStyle = "backdrop-blur-md bg-zinc-900/40 border border-white/10 shadow-2xl"
 
-export function Stacks({ services = [], onRefresh }) {
+export function Stacks({ services = [], onRefresh, onDeployStack }) {
   const [search, setSearch] = useState("")
   const [selectedStack, setSelectedStack] = useState(null)
+  
+  // Deploy / Add Stack Modal State
+  const [isDeployOpen, setIsDeployOpen] = useState(false)
+  const [stackNameInput, setStackNameInput] = useState("")
+  const [composeContent, setComposeContent] = useState("")
 
   const safeServices = Array.isArray(services) ? services : []
 
-    // Group individual containers by their Docker Compose project/stack label if available,
-    // or fall back to grouping common service prefixes.
-    const stacksMap = safeServices.reduce((acc, container) => {
-    // 1. Prefer backend-parsed stack property
-    // 2. Check compose project label directly
-    // 3. Group remaining unstacked containers into "standalone"
+  // Group individual containers by their Docker Compose project/stack label if available,
+  // or fall back to grouping common service prefixes.
+  const stacksMap = safeServices.reduce((acc, container) => {
     const stackName =
-    container.stack ||
-    container.labels?.["com.docker.compose.project"] ||
-    "standalone"
+      container.stack ||
+      container.labels?.["com.docker.compose.project"] ||
+      "standalone"
 
     const displayName = stackName === "standalone" ? "Standalone Services" : stackName
 
     if (!acc[stackName]) {
-    acc[stackName] = {
+      acc[stackName] = {
         name: displayName,
         rawKey: stackName,
         containers: [],
-        }
+      }
     }
 
     acc[stackName].containers.push(container)
     return acc
-    }, {})
+  }, {})
 
   const stackList = Object.values(stacksMap)
 
   const filteredStacks = stackList.filter((stack) =>
     stack.name.toLowerCase().includes(search.toLowerCase())
   )
+
+  const handleDeploySubmit = (e) => {
+    e.preventDefault()
+    if (!stackNameInput.trim()) return
+
+    if (onDeployStack) {
+      onDeployStack({
+        name: stackNameInput.trim(),
+        compose: composeContent,
+      })
+    }
+
+    setStackNameInput("")
+    setComposeContent("")
+    setIsDeployOpen(false)
+  }
 
   return (
     <div className="min-h-full w-full p-6 space-y-6 text-zinc-100">
@@ -60,7 +78,10 @@ export function Stacks({ services = [], onRefresh }) {
               className="w-full pl-9 pr-4 py-1.5 text-sm bg-zinc-900/60 border border-white/10 rounded-xl text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
             />
           </div>
-          <button className="flex items-center gap-2 px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 rounded-xl text-xs font-semibold transition-colors">
+          <button
+            onClick={() => setIsDeployOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 rounded-xl text-xs font-semibold transition-colors shrink-0"
+          >
             <Plus className="h-4 w-4" /> Deploy Stack
           </button>
         </div>
@@ -157,6 +178,75 @@ export function Stacks({ services = [], onRefresh }) {
           </div>
         )}
       </div>
+
+      {/* Deploy New Stack Modal */}
+      {isDeployOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setIsDeployOpen(false)}
+          />
+          <div className={`relative w-full max-w-lg rounded-2xl p-6 ${glassStyle} space-y-4`}>
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <Plus className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold text-base">Deploy New Stack</h3>
+              </div>
+              <button
+                onClick={() => setIsDeployOpen(false)}
+                className="text-zinc-400 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleDeploySubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                  Stack Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. monitoring-stack"
+                  value={stackNameInput}
+                  onChange={(e) => setStackNameInput(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-black/40 border border-white/10 rounded-xl text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1">
+                  docker-compose.yml Content
+                </label>
+                <textarea
+                  rows={8}
+                  placeholder={`version: '3.8'\nservices:\n  app:\n    image: nginx:latest\n    ports:\n      - "8080:80"`}
+                  value={composeContent}
+                  onChange={(e) => setComposeContent(e.target.value)}
+                  className="w-full p-3 font-mono text-xs bg-black/60 border border-white/10 rounded-xl text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setIsDeployOpen(false)}
+                  className="px-4 py-2 text-xs font-medium rounded-xl border border-white/10 text-zinc-400 hover:text-zinc-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-xs font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  Deploy Stack
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Compose Viewer Modal */}
       {selectedStack && (
