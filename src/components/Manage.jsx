@@ -1,9 +1,9 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { Container, Eye, EyeOff, Pencil, Plus, Search, Trash2, X } from "lucide-react"
 import { ICONS, CategoryTag, ServiceIcon, StatusDot, glass } from "./UIHelpers"
 
 const ICON_OPTIONS = ["container", "image", "cctv", "shield", "workflow", "bot", "music", "search", "download", "video"]
-const CATEGORY_OPTIONS = ["AI", "Media", "Infra", "Network", "Automation"]
+const DEFAULT_CATEGORIES = ["AI", "Media", "Infra", "Network", "Automation"]
 
 function Field({ label, children }) {
   return (
@@ -19,6 +19,21 @@ function ServiceModal({ initial, onClose, onSave }) {
   const [port, setPort] = useState(initial?.port ?? "")
   const [category, setCategory] = useState(initial?.category ?? "Infra")
   const [icon, setIcon] = useState(initial?.icon ?? "container")
+
+  // Sync category options with LocalStorage and Settings events
+  const [categories, setCategories] = useState(() => {
+    const saved = localStorage.getItem("homelab_categories")
+    return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES
+  })
+
+  useEffect(() => {
+    const handleCategoryUpdate = () => {
+      const saved = localStorage.getItem("homelab_categories")
+      if (saved) setCategories(JSON.parse(saved))
+    }
+    window.addEventListener("homelab_categories_updated", handleCategoryUpdate)
+    return () => window.removeEventListener("homelab_categories_updated", handleCategoryUpdate)
+  }, [])
 
   function handleSave() {
     if (!name.trim()) return
@@ -70,7 +85,7 @@ function ServiceModal({ initial, onClose, onSave }) {
               onChange={(e) => setCategory(e.target.value)}
               className="w-full rounded-lg border border-white/10 bg-input/40 px-3 py-2 text-sm outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
             >
-              {CATEGORY_OPTIONS.map((c) => (
+              {categories.map((c) => (
                 <option key={c} value={c} className="bg-popover">
                   {c}
                 </option>

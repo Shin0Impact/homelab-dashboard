@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react"
-import { Plus, X, Download, Upload, RotateCcw, Check } from "lucide-react"
+import { Plus, X, Download, Upload, RotateCcw } from "lucide-react"
 
 const glass =
   "border border-white/5 bg-card/60 backdrop-blur-xl shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset]"
@@ -22,46 +22,32 @@ function Toggle({ on, onChange }) {
   )
 }
 
+// Default fallback categories
+const DEFAULT_CATEGORIES = ["AI", "Media", "Infra", "Network", "Automation"]
+
 export function Settings() {
-  // Initialize state from LocalStorage so toggles persist immediately
+  // Load categories from LocalStorage
   const [categories, setCategories] = useState(() => {
     const saved = localStorage.getItem("homelab_categories")
-    return saved ? JSON.parse(saved) : ["AI", "Media", "Infra", "Network", "Automation"]
+    return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES
   })
   const [newCat, setNewCat] = useState("")
 
-  const [compact, setCompact] = useState(() => {
-    return localStorage.getItem("homelab_compact") === "true"
-  })
-  const [amoled, setAmoled] = useState(() => {
-    return localStorage.getItem("homelab_amoled") === "true"
-  })
-  const [animations, setAnimations] = useState(() => {
-    return localStorage.getItem("homelab_animations") !== "false"
-  })
-  const [openInNewTab, setOpenInNewTab] = useState(() => {
-    return localStorage.getItem("homelab_newtab") !== "false"
-  })
-  const [normalizeCpu, setNormalizeCpu] = useState(() => {
-    return localStorage.getItem("homelab_normalize_cpu") !== "false"
-  })
-  const [refresh, setRefresh] = useState(() => {
-    const saved = localStorage.getItem("homelab_refresh")
-    return saved ? Number(saved) : 5
-  })
+  // Clean appearance & behavior states
+  const [compact, setCompact] = useState(() => localStorage.getItem("homelab_compact") === "true")
+  const [amoled, setAmoled] = useState(() => localStorage.getItem("homelab_amoled") === "true")
+  const [refresh, setRefresh] = useState(() => Number(localStorage.getItem("homelab_refresh")) || 10)
 
-  const [savedStatus, setSavedStatus] = useState(false)
-
-  // Save changes automatically on toggle/update
+  // Save changes to LocalStorage and broadcast event to other components
   useEffect(() => {
     localStorage.setItem("homelab_categories", JSON.stringify(categories))
     localStorage.setItem("homelab_compact", compact)
     localStorage.setItem("homelab_amoled", amoled)
-    localStorage.setItem("homelab_animations", animations)
-    localStorage.setItem("homelab_newtab", openInNewTab)
-    localStorage.setItem("homelab_normalize_cpu", normalizeCpu)
     localStorage.setItem("homelab_refresh", refresh)
-  }, [categories, compact, amoled, animations, openInNewTab, normalizeCpu, refresh])
+
+    // Broadcast category update to the rest of the application
+    window.dispatchEvent(new Event("homelab_categories_updated"))
+  }, [categories, compact, amoled, refresh])
 
   function addCat() {
     const v = newCat.trim()
@@ -71,31 +57,21 @@ export function Settings() {
     }
   }
 
-  const triggerNotify = () => {
-    setSavedStatus(true)
-    setTimeout(() => setSavedStatus(false), 2000)
+  function removeCat(category) {
+    setCategories(categories.filter((c) => c !== category))
   }
 
-  // Backup export (Downloads your config to JSON)
+  // Backup & Restore
   const handleExport = () => {
-    const data = {
-      categories,
-      compact,
-      amoled,
-      animations,
-      openInNewTab,
-      normalizeCpu,
-      refresh,
-    }
+    const data = { categories, compact, amoled, refresh }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `homelab-settings-${new Date().toISOString().slice(0, 10)}.json`
+    a.download = `homelab-settings.json`
     a.click()
   }
 
-  // Backup import
   const handleImport = (e) => {
     const fileReader = new FileReader()
     if (e.target.files && e.target.files[0]) {
@@ -103,177 +79,130 @@ export function Settings() {
       fileReader.onload = (event) => {
         try {
           const parsed = JSON.parse(event.target.result)
-          if (parsed.categories) setCategories(parsed.categories)
+          if (Array.isArray(parsed.categories)) setCategories(parsed.categories)
           if (parsed.compact !== undefined) setCompact(parsed.compact)
           if (parsed.amoled !== undefined) setAmoled(parsed.amoled)
-          if (parsed.animations !== undefined) setAnimations(parsed.animations)
-          if (parsed.openInNewTab !== undefined) setOpenInNewTab(parsed.openInNewTab)
-          if (parsed.normalizeCpu !== undefined) setNormalizeCpu(parsed.normalizeCpu)
           if (parsed.refresh) setRefresh(parsed.refresh)
-          triggerNotify()
         } catch (err) {
-          alert("Invalid Settings JSON!")
+          alert("Invalid backup file.")
         }
-      };
+      }
     }
   }
 
   return (
-    <div className="max-w-4xl space-y-6 p-8">
-      {/* Toast alert on import/save */}
-      {savedStatus && (
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-400">
-          <Check className="h-3.5 w-3.5" /> Settings updated successfully!
-        </div>
-      )}
+    <div className="grid max-w-4xl grid-cols-1 gap-6 p-8 lg:grid-cols-2">
+      {/* Category Management */}
+      <div className={`rounded-2xl p-6 ${glass}`}>
+        <h2 className="text-base font-semibold">Categories</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Tags used to organize your services.</p>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Category management */}
-        <div className={`rounded-2xl p-6 ${glass}`}>
-          <h2 className="text-base font-semibold">Categories</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Tags used to organize your services.</p>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {categories.map((c) => (
-              <span
-                key={c}
-                className="flex items-center gap-1.5 rounded-full border border-white/10 bg-secondary/50 px-3 py-1 text-xs font-medium"
+        <div className="mt-4 flex flex-wrap gap-2">
+          {categories.map((c) => (
+            <span
+              key={c}
+              className="flex items-center gap-1.5 rounded-full border border-white/10 bg-secondary/50 px-3 py-1 text-xs font-medium"
+            >
+              {c}
+              <button
+                onClick={() => removeCat(c)}
+                className="text-muted-foreground hover:text-destructive"
               >
-                {c}
-                <button
-                  onClick={() => setCategories(categories.filter((x) => x !== c))}
-                  className="text-muted-foreground hover:text-destructive"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
-          </div>
-
-          <div className="mt-4 flex gap-2">
-            <input
-              value={newCat}
-              onChange={(e) => setNewCat(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.nativeEvent.isComposing) addCat()
-              }}
-              placeholder="New category"
-              className="flex-1 rounded-lg border border-white/10 bg-input/40 px-3 py-2 text-sm outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
-            />
-            <button
-              onClick={addCat}
-              className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
-              <Plus className="h-4 w-4" />
-              Add
-            </button>
-          </div>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
         </div>
 
-        {/* Appearance & Interface */}
-        <div className={`rounded-2xl p-6 ${glass}`}>
-          <h2 className="text-base font-semibold">Appearance</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Customize how the dashboard behaves.</p>
+        <div className="mt-4 flex gap-2">
+          <input
+            value={newCat}
+            onChange={(e) => setNewCat(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) addCat()
+            }}
+            placeholder="New category"
+            className="flex-1 rounded-lg border border-white/10 bg-input/40 px-3 py-2 text-sm outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+          />
+          <button
+            onClick={addCat}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4" />
+            Add
+          </button>
+        </div>
+      </div>
 
-          <div className="mt-5 space-y-5">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium">Compact Mode</p>
-                <p className="text-xs text-muted-foreground">Tighter cards and spacing.</p>
-              </div>
-              <Toggle on={compact} onChange={setCompact} />
-            </div>
+      {/* Dashboard Appearance */}
+      <div className={`rounded-2xl p-6 ${glass}`}>
+        <h2 className="text-base font-semibold">Appearance</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Customize dashboard UI behavior.</p>
 
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium">AMOLED Dark</p>
-                <p className="text-xs text-muted-foreground">Pure-black background variant.</p>
-              </div>
-              <Toggle on={amoled} onChange={setAmoled} />
-            </div>
-
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium">Animations</p>
-                <p className="text-xs text-muted-foreground">Status pulses and transitions.</p>
-              </div>
-              <Toggle on={animations} onChange={setAnimations} />
-            </div>
-
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium">Open Web Links in New Tab</p>
-                <p className="text-xs text-muted-foreground">Launch web UIs target="_blank".</p>
-              </div>
-              <Toggle on={openInNewTab} onChange={setOpenInNewTab} />
-            </div>
-
+        <div className="mt-5 space-y-5">
+          <div className="flex items-center justify-between gap-4">
             <div>
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">Telemetry Interval</p>
-                <span className="font-mono text-sm text-primary">{refresh}s</span>
-              </div>
-              <input
-                type="range"
-                min={2}
-                max={60}
-                step={1}
-                value={refresh}
-                onChange={(e) => setRefresh(Number(e.target.value))}
-                className="mt-3 w-full accent-[var(--primary)]"
-              />
+              <p className="text-sm font-medium">Compact Mode</p>
+              <p className="text-xs text-muted-foreground">Tighter cards and spacing.</p>
             </div>
+            <Toggle on={compact} onChange={setCompact} />
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium">AMOLED Dark</p>
+              <p className="text-xs text-muted-foreground">Pure-black background variant.</p>
+            </div>
+            <Toggle on={amoled} onChange={setAmoled} />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">Refresh Interval</p>
+              <span className="font-mono text-sm text-primary">{refresh}s</span>
+            </div>
+            <input
+              type="range"
+              min={5}
+              max={60}
+              step={5}
+              value={refresh}
+              onChange={(e) => setRefresh(Number(e.target.value))}
+              className="mt-3 w-full accent-[var(--primary)]"
+            />
           </div>
         </div>
+      </div>
 
-        {/* Docker & System Calculations */}
-        <div className={`rounded-2xl p-6 ${glass}`}>
-          <h2 className="text-base font-semibold">Metrics Calculation</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Adjust telemetry behavior.</p>
+      {/* Backup & Import/Export */}
+      <div className={`rounded-2xl p-6 ${glass} lg:col-span-2`}>
+        <h2 className="text-base font-semibold">Backup & Data</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Export or restore dashboard preferences.</p>
 
-          <div className="mt-5 space-y-5">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium">Cap CPU Usage at 100%</p>
-                <p className="text-xs text-muted-foreground">
-                  Normalizes multi-core CPU stats to 100% max limit instead of per-core (800%).
-                </p>
-              </div>
-              <Toggle on={normalizeCpu} onChange={setNormalizeCpu} />
-            </div>
-          </div>
-        </div>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 rounded-lg border border-white/10 bg-secondary/50 px-4 py-2 text-xs font-medium hover:bg-secondary"
+          >
+            <Download className="h-3.5 w-3.5" /> Export Settings
+          </button>
 
-        {/* Data & Backup */}
-        <div className={`rounded-2xl p-6 ${glass}`}>
-          <h2 className="text-base font-semibold">Backup & Configuration</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Export or restore settings state.</p>
+          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-secondary/50 px-4 py-2 text-xs font-medium hover:bg-secondary">
+            <Upload className="h-3.5 w-3.5" /> Import Settings
+            <input type="file" accept=".json" onChange={handleImport} className="hidden" />
+          </label>
 
-          <div className="mt-5 space-y-3">
-            <button
-              onClick={handleExport}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-secondary/50 px-3 py-2 text-xs font-medium hover:bg-secondary"
-            >
-              <Download className="h-3.5 w-3.5 text-primary" /> Export Configuration JSON
-            </button>
-
-            <label className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-white/10 bg-secondary/50 px-3 py-2 text-xs font-medium hover:bg-secondary">
-              <Upload className="h-3.5 w-3.5 text-purple-400" /> Import Configuration JSON
-              <input type="file" accept=".json" onChange={handleImport} className="hidden" />
-            </label>
-
-            <button
-              onClick={() => {
-                if (confirm("Reset settings to defaults?")) {
-                  localStorage.clear()
-                  window.location.reload()
-                }
-              }}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive hover:bg-destructive/20"
-            >
-              <RotateCcw className="h-3.5 w-3.5" /> Reset to Defaults
-            </button>
-          </div>
+          <button
+            onClick={() => {
+              if (confirm("Reset settings to default values?")) {
+                localStorage.clear()
+                window.location.reload()
+              }
+            }}
+            className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-2 text-xs font-medium text-destructive hover:bg-destructive/20"
+          >
+            <RotateCcw className="h-3.5 w-3.5" /> Reset Defaults
+          </button>
         </div>
       </div>
     </div>
