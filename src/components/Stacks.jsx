@@ -1,197 +1,211 @@
-import React, { useState } from "react"
-import { Layers, Play, Square, RotateCw, FileCode, Plus, Search, ChevronRight, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react"
+import React, { useState, useEffect } from "react"
+import { Layers, Play, Trash2, Plus, RefreshCw, Loader2, Code2, CheckCircle2, AlertCircle } from "lucide-react"
+import { glass } from "./UIHelpers"
 
-const glassStyle = "backdrop-blur-md bg-zinc-900/40 border border-white/10 shadow-2xl"
+export function Stacks({ onRefresh }) {
+  const [stacks, setStacks] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [deploying, setDeploying] = useState(false)
+  const [stackName, setStackName] = useState("")
+  const [composeContent, setComposeContent] = useState(`version: '3.8'
+services:
+  web:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+`)
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
 
-export function Stacks({ services = [], onRefresh }) {
-  const [search, setSearch] = useState("")
-  const [selectedStack, setSelectedStack] = useState(null)
-
-  const safeServices = Array.isArray(services) ? services : []
-
-    // Group individual containers by their Docker Compose project/stack label if available,
-    // or fall back to grouping common service prefixes.
-    const stacksMap = safeServices.reduce((acc, container) => {
-    // 1. Prefer backend-parsed stack property
-    // 2. Check compose project label directly
-    // 3. Group remaining unstacked containers into "standalone"
-    const stackName =
-    container.stack ||
-    container.labels?.["com.docker.compose.project"] ||
-    "standalone"
-
-    const displayName = stackName === "standalone" ? "Standalone Services" : stackName
-
-    if (!acc[stackName]) {
-    acc[stackName] = {
-        name: displayName,
-        rawKey: stackName,
-        containers: [],
-        }
+  const fetchStacks = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch("/api/stacks")
+      if (res.ok) {
+        const data = await res.json()
+        setStacks(data)
+      }
+    } catch (err) {
+      console.error("Failed to fetch stacks:", err)
+    } finally {
+      setLoading(false)
     }
+  }
 
-    acc[stackName].containers.push(container)
-    return acc
-    }, {})
+  useEffect(() => {
+    fetchStacks()
+  }, [])
 
-  const stackList = Object.values(stacksMap)
+  const handleDeploy = async (e) => {
+    e.preventDefault()
+    setError("")
+    setSuccess("")
+    setDeploying(true)
 
-  const filteredStacks = stackList.filter((stack) =>
-    stack.name.toLowerCase().includes(search.toLowerCase())
-  )
+    try {
+      const res = await fetch("/api/stacks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: stackName, composeContent }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) throw new Error(data.error || "Deployment failed")
+
+      setSuccess(`Stack '${stackName}' deployed successfully.`)
+      setStackName("")
+      fetchStacks()
+      if (onRefresh) onRefresh()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDeploying(false)
+    }
+  }
+
+  const handleDelete = async (name) => {
+    if (!confirm(`Are you sure you want to stop and delete stack '${name}'?`)) return
+
+    try {
+      const res = await fetch(`/api/stacks/${name}`, { method: "DELETE" })
+      if (res.ok) {
+        fetchStacks()
+        if (onRefresh) onRefresh()
+      } else {
+        const data = await res.json()
+        alert(data.error || "Failed to delete stack")
+      }
+    } catch (err) {
+      console.error("Failed to delete stack:", err)
+    }
+  }
 
   return (
-    <div className="min-h-full w-full p-6 space-y-6 text-zinc-100">
-      {/* Header Controls */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-foreground">Docker Stacks</h2>
-          <p className="text-xs text-zinc-400">Manage stack deployments and Compose environments</p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="relative flex-1 sm:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-            <input
-              type="text"
-              placeholder="Search stacks..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-1.5 text-sm bg-zinc-900/60 border border-white/10 rounded-xl text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-            />
+    <div className="space-y-6 p-4 sm:p-6 md:p-8 max-w-7xl">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Deploy New Stack Form */}
+        <div className={`lg:col-span-1 rounded-2xl p-5 sm:p-6 ${glass}`}>
+          <div className="flex items-center gap-2 mb-4">
+            <Code2 className="h-5 w-5 text-primary" />
+            <h2 className="text-base font-semibold">Deploy New Stack</h2>
           </div>
-          <button className="flex items-center gap-2 px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 rounded-xl text-xs font-semibold transition-colors">
-            <Plus className="h-4 w-4" /> Deploy Stack
-          </button>
+
+          {error && (
+            <div className="mb-4 flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-xs text-destructive">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {success && (
+            <div className="mb-4 flex items-center gap-2 rounded-lg bg-emerald-500/10 p-3 text-xs text-emerald-400">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span>{success}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleDeploy} className="space-y-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Stack Name</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. my-app"
+                value={stackName}
+                onChange={(e) => setStackName(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
+                className="w-full rounded-lg border border-white/10 bg-input/40 px-3 py-2 text-sm outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">docker-compose.yml</label>
+              <textarea
+                required
+                rows={12}
+                value={composeContent}
+                onChange={(e) => setComposeContent(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-input/40 p-3 font-mono text-xs outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={deploying}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              {deploying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
+              Deploy Stack
+            </button>
+          </form>
         </div>
-      </div>
 
-      {/* Stacks List */}
-      <div className="grid grid-cols-1 gap-4">
-        {filteredStacks.map((stack) => {
-          const totalContainers = stack.containers.length
-          const runningContainers = stack.containers.filter(
-            (c) => c.status === "online" || c.state === "running"
-          ).length
-          const isHealthy = runningContainers === totalContainers && totalContainers > 0
+        {/* Existing Stacks List */}
+        <div className={`lg:col-span-2 rounded-2xl p-5 sm:p-6 ${glass}`}>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Layers className="h-5 w-5 text-primary" />
+              <h2 className="text-base font-semibold">Active Docker Stacks</h2>
+            </div>
+            <button
+              onClick={fetchStacks}
+              className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary/50 text-muted-foreground hover:text-foreground"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            </button>
+          </div>
 
-          return (
-            <div key={stack.name} className={`p-5 rounded-2xl ${glassStyle} space-y-4`}>
-              {/* Stack Header Row */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/5">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-primary ring-1 ring-primary/25">
-                    <Layers className="h-5 w-5" />
+          <div className="space-y-4">
+            {stacks.map((st) => (
+              <div key={st.name} className="rounded-xl border border-white/5 bg-secondary/20 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`h-2.5 w-2.5 rounded-full ${
+                        st.status === "running" ? "bg-emerald-400" : "bg-muted-foreground"
+                      }`}
+                    />
+                    <div>
+                      <h3 className="font-semibold text-sm">{st.name}</h3>
+                      <p className="text-xs text-muted-foreground">
+                        {st.containers.length} container{st.containers.length === 1 ? "" : "s"} attached
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-base capitalize">{stack.name}</h3>
+
+                  <button
+                    onClick={() => handleDelete(st.name)}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {st.containers.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2 border-t border-white/5 pt-3">
+                    {st.containers.map((c) => (
                       <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          isHealthy
-                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                            : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                        }`}
+                        key={c.id}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-white/5 bg-background/50 px-2.5 py-1 text-[11px] font-mono text-muted-foreground"
                       >
                         <span
                           className={`h-1.5 w-1.5 rounded-full ${
-                            isHealthy ? "bg-emerald-400" : "bg-amber-400"
+                            c.state === "running" ? "bg-emerald-400" : "bg-destructive"
                           }`}
                         />
-                        {runningContainers} / {totalContainers} Running
+                        {c.name}
                       </span>
-                    </div>
-                    <p className="text-xs text-zinc-400 mt-0.5">
-                      Stack contain {totalContainers} service container{totalContainers > 1 ? "s" : ""}
-                    </p>
+                    ))}
                   </div>
-                </div>
-
-                {/* Stack Action Controls */}
-                <div className="flex items-center gap-2 self-end sm:self-auto">
-                  <button
-                    onClick={() => setSelectedStack(stack.name)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-white/10 bg-zinc-800/50 text-zinc-300 hover:bg-zinc-700/50 transition-colors"
-                  >
-                    <FileCode className="h-3.5 w-3.5" /> Compose File
-                  </button>
-                  <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors">
-                    <Play className="h-3.5 w-3.5 fill-current" /> Deploy
-                  </button>
-                  <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 transition-colors">
-                    <Square className="h-3.5 w-3.5 fill-current" /> Down
-                  </button>
-                </div>
+                )}
               </div>
+            ))}
 
-              {/* Stack Services List */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                {stack.containers.map((c) => {
-                  const isOnline = c.status === "online" || c.state === "running"
-                  return (
-                    <div
-                      key={c.id}
-                      className="flex items-center justify-between p-2.5 rounded-xl bg-black/20 border border-white/5 text-xs"
-                    >
-                      <div className="min-w-0 pr-2">
-                        <p className="font-medium text-zinc-200 truncate">{c.name || c.containerName}</p>
-                        <p className="font-mono text-[10px] text-zinc-500 truncate">{c.image}</p>
-                      </div>
-                      <span
-                        className={`h-2 w-2 rounded-full shrink-0 ${
-                          isOnline ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" : "bg-rose-500"
-                        }`}
-                      />
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )
-        })}
-
-        {filteredStacks.length === 0 && (
-          <div className={`p-8 text-center text-sm text-zinc-400 rounded-2xl flex flex-col items-center gap-2 ${glassStyle}`}>
-            <AlertCircle className="h-6 w-6 text-zinc-500" />
-            <p>No Docker stacks found.</p>
-          </div>
-        )}
-      </div>
-
-      {/* Compose Viewer Modal */}
-      {selectedStack && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-            onClick={() => setSelectedStack(null)}
-          />
-          <div className={`relative w-full max-w-2xl rounded-2xl p-6 ${glassStyle} space-y-4`}>
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div className="flex items-center gap-2">
-                <FileCode className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold text-base capitalize">{selectedStack} — docker-compose.yml</h3>
-              </div>
-              <button
-                onClick={() => setSelectedStack(null)}
-                className="text-zinc-400 hover:text-white text-sm"
-              >
-                ✕
-              </button>
-            </div>
-            <pre className="p-4 rounded-xl bg-black/80 font-mono text-xs text-emerald-400 overflow-x-auto max-h-96">
-{`version: '3.8'
-services:
-  ${selectedStack}:
-    image: ${stacksMap[selectedStack]?.containers[0]?.image || "custom/image:latest"}
-    restart: unless-stopped
-    ports:
-      - "${stacksMap[selectedStack]?.containers[0]?.port || 8080}:${stacksMap[selectedStack]?.containers[0]?.port || 8080}"
-    environment:
-      - NODE_ENV=production`}
-            </pre>
+            {stacks.length === 0 && !loading && (
+              <div className="py-12 text-center text-sm text-muted-foreground">No active stacks found.</div>
+            )}
           </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }

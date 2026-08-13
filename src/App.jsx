@@ -24,9 +24,16 @@ export default function App() {
   const [services, setServices] = useState([])
   const [categories, setCategories] = useState([])
 
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem("homelab_token")
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  }
+
   const fetchContainers = useCallback(async () => {
     try {
-      const res = await fetch("/api/containers")
+      const res = await fetch("/api/containers", {
+        headers: getAuthHeaders(),
+      })
       const data = await res.json()
 
       if (Array.isArray(data)) {
@@ -52,7 +59,10 @@ export default function App() {
     try {
       await fetch("/api/services", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
         body: JSON.stringify(newService),
       })
       fetchContainers()
@@ -65,7 +75,10 @@ export default function App() {
     try {
       await fetch(`/api/services/${updatedService.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
         body: JSON.stringify(updatedService),
       })
       fetchContainers()
@@ -78,6 +91,7 @@ export default function App() {
     try {
       await fetch(`/api/services/${id}`, {
         method: "DELETE",
+        headers: getAuthHeaders(),
       })
       fetchContainers()
     } catch (err) {
@@ -85,13 +99,15 @@ export default function App() {
     }
   }
 
-  const handleLogin = () => {
+  const handleLogin = (token) => {
+    if (token) localStorage.setItem("homelab_token", token)
     localStorage.setItem("homelab_authed", "true")
     setAuthed(true)
   }
 
   const handleLogout = () => {
     localStorage.removeItem("homelab_authed")
+    localStorage.removeItem("homelab_token")
     setAuthed(false)
   }
 

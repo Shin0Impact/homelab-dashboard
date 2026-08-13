@@ -48,9 +48,9 @@ export function Login({ onSignIn }) {
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary ring-1 ring-primary/25">
             <Server className="h-7 w-7" />
           </div>
-          <h1 className="mt-4 text-xl font-semibold">Homelab OS</h1>
+          <h1 className="mt-4 text-xl font-semibold">Homelab Dashboard</h1>
           <p className="mt-1 text-sm text-muted-foreground text-pretty">
-            Authenticate to access your private server.
+            Authenticate to access your private dashboard.
           </p>
         </div>
 
@@ -106,7 +106,7 @@ export function Login({ onSignIn }) {
             disabled={loading}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
           >
-            {loading ? "Signing in..." : "Sign In to Server"}
+            {loading ? "Signing in..." : "Sign In to Dashboard"}
             <ChevronRight className="h-4 w-4" />
           </button>
         </form>

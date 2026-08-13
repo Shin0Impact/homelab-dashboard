@@ -6,7 +6,11 @@ import Docker from "dockerode";
 import path from "path";
 import fs from "fs";
 import os from "os";
+import { exec } from "child_process";
+import { promisify } from "util";
 import { fileURLToPath } from "url";
+
+const execAsync = promisify(exec);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,9 +22,14 @@ const JWT_SECRET =
 
 // --- Custom Services Storage Setup ---
 const DATA_FILE = path.resolve(__dirname, "custom_services.json");
+const STACKS_DIR = path.resolve(__dirname, "stacks");
 
 if (!fs.existsSync(DATA_FILE)) {
   fs.writeFileSync(DATA_FILE, JSON.stringify([], null, 2));
+}
+
+if (!fs.existsSync(STACKS_DIR)) {
+  fs.mkdirSync(STACKS_DIR, { recursive: true });
 }
 
 const getCustomServices = () => {
@@ -88,7 +97,6 @@ function requireAdmin(req, res, next) {
 
 // --- Auth Endpoints ---
 
-// POST /api/login
 app.post("/api/login", async (req, res) => {
   const { username, password } = req.body;
 
@@ -122,13 +130,11 @@ app.post("/api/login", async (req, res) => {
   });
 });
 
-// GET /api/users (Admin only)
 app.get("/api/users", authenticateToken, requireAdmin, (req, res) => {
   const safeUsers = users.map(({ passwordHash, ...u }) => u);
   res.json(safeUsers);
 });
 
-// POST /api/users (Admin only)
 app.post("/api/users", authenticateToken, requireAdmin, async (req, res) => {
   const { username, password, role } = req.body;
 
@@ -154,7 +160,6 @@ app.post("/api/users", authenticateToken, requireAdmin, async (req, res) => {
     .json({ id: newUser.id, username: newUser.username, role: newUser.role });
 });
 
-// DELETE /api/users/:id (Admin only)
 app.delete("/api/users/:id", authenticateToken, requireAdmin, (req, res) => {
   const { id } = req.params;
 
@@ -168,6 +173,31 @@ app.delete("/api/users/:id", authenticateToken, requireAdmin, (req, res) => {
   users = users.filter((u) => u.id !== id);
   res.json({ message: "User deleted" });
 });
+
+app.put(
+  "/api/users/:id/password",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.trim().length === 0) {
+      return res.status(400).json({ message: "New password is required" });
+    }
+
+    const targetUser = users.find((u) => u.id === id);
+    if (!targetUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    targetUser.passwordHash = await bcrypt.hash(newPassword, 10);
+
+    res.json({
+      message: `Password for user '${targetUser.username}' updated successfully.`,
+    });
+  },
+);
 
 // --- Docker Container Management & Telemetry ---
 
@@ -265,7 +295,7 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
     const hostHeader = req.headers.host || req.hostname;
     const clientHost = hostHeader.split(":")[0];
 
-    const services = rawContainers.map((container) => {
+    const containerServices = rawContainers.map((container) => {
       const rawName = container.Names[0]
         ? container.Names[0].replace("/", "")
         : "unnamed";
@@ -335,8 +365,19 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
         url: finalUrl,
         image: container.Image,
         ports: container.Ports,
+        hidden: custom.hidden || false,
       };
     });
+
+    const standaloneCustom = customOverrides.filter(
+      (c) =>
+        c.isCustom &&
+        !containerServices.some(
+          (cs) => cs.id === c.id || cs.containerName === c.containerName,
+        ),
+    );
+
+    const services = [...containerServices, ...standaloneCustom];
 
     res.json({
       services,
@@ -348,6 +389,73 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
     res
       .status(500)
       .json({ error: "Failed to list containers", details: err.message });
+  }
+});
+
+app.post("/api/services", (req, res) => {
+  try {
+    const custom = getCustomServices();
+    const newService = {
+      id: req.body.id || `custom-${Date.now()}`,
+      isCustom: true,
+      online: true,
+      hidden: false,
+      ...req.body,
+    };
+
+    custom.push(newService);
+    saveCustomServices(custom);
+    res.status(201).json(newService);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to create service" });
+  }
+});
+
+app.put("/api/services/:id", async (req, res) => {
+  try {
+    let custom = getCustomServices();
+    const { id } = req.params;
+
+    let containerName = req.body.containerName || "";
+    if (!containerName) {
+      try {
+        const rawContainers = await docker.listContainers({ all: true });
+        const match = rawContainers.find((c) => c.Id === id);
+        if (match && match.Names[0]) {
+          containerName = match.Names[0].replace("/", "");
+        }
+      } catch (e) {}
+    }
+
+    const existingIndex = custom.findIndex(
+      (s) =>
+        s.id === id || (containerName && s.containerName === containerName),
+    );
+
+    const updatedData = { id, containerName, ...req.body };
+
+    if (existingIndex > -1) {
+      custom[existingIndex] = { ...custom[existingIndex], ...updatedData };
+    } else {
+      custom.push(updatedData);
+    }
+
+    saveCustomServices(custom);
+    res.json({ success: true, service: updatedData });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update service" });
+  }
+});
+
+app.delete("/api/services/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    let custom = getCustomServices();
+    custom = custom.filter((s) => s.id !== id);
+    saveCustomServices(custom);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete service" });
   }
 });
 
@@ -496,66 +604,114 @@ app.post("/api/containers/:id/:action", async (req, res) => {
   }
 });
 
-app.put("/api/services/:id", async (req, res) => {
+// --- Stacks Management Endpoints ---
+
+app.get("/api/stacks", async (req, res) => {
   try {
-    let custom = getCustomServices();
-    const { id } = req.params;
+    const rawContainers = await docker.listContainers({ all: true });
+    const stackMap = {};
 
-    let containerName = req.body.containerName || "";
-    if (!containerName) {
-      try {
-        const rawContainers = await docker.listContainers({ all: true });
-        const match = rawContainers.find((c) => c.Id === id);
-        if (match && match.Names[0]) {
-          containerName = match.Names[0].replace("/", "");
-        }
-      } catch (e) {}
-    }
+    rawContainers.forEach((c) => {
+      const projectName =
+        c.Labels?.["com.docker.compose.project"] || "standalone";
+      if (!stackMap[projectName]) {
+        stackMap[projectName] = {
+          name: projectName,
+          containers: [],
+          status: "stopped",
+        };
+      }
+      stackMap[projectName].containers.push({
+        id: c.Id,
+        name: c.Names[0] ? c.Names[0].replace("/", "") : c.Id.substring(0, 8),
+        state: c.State,
+      });
+    });
 
-    const existingIndex = custom.findIndex(
-      (s) =>
-        s.id === id || (containerName && s.containerName === containerName),
-    );
+    Object.values(stackMap).forEach((st) => {
+      if (st.containers.some((c) => c.state === "running")) {
+        st.status = "running";
+      }
+    });
 
-    const updatedData = { id, containerName, ...req.body };
+    const localStackDirs = fs
+      .readdirSync(STACKS_DIR, { withFileTypes: true })
+      .filter((dirent) => dirent.isDirectory())
+      .map((dirent) => dirent.name);
 
-    if (existingIndex > -1) {
-      custom[existingIndex] = { ...custom[existingIndex], ...updatedData };
-    } else {
-      custom.push(updatedData);
-    }
+    localStackDirs.forEach((dirName) => {
+      if (!stackMap[dirName]) {
+        stackMap[dirName] = {
+          name: dirName,
+          containers: [],
+          status: "stopped",
+        };
+      }
+      const composeFile = path.join(STACKS_DIR, dirName, "docker-compose.yml");
+      if (fs.existsSync(composeFile)) {
+        stackMap[dirName].composeContent = fs.readFileSync(
+          composeFile,
+          "utf-8",
+        );
+      }
+    });
 
-    saveCustomServices(custom);
-    res.json({ success: true });
-  } catch {
-    res.status(500).json({ error: "Failed to update service" });
+    res.json(Object.values(stackMap));
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: "Failed to list stacks", details: err.message });
   }
 });
 
-app.put(
-  "/api/users/:id/password",
-  authenticateToken,
-  requireAdmin,
-  async (req, res) => {
-    const { id } = req.params;
-    const { newPassword } = req.body;
+app.post("/api/stacks", async (req, res) => {
+  const { name, composeContent } = req.body;
+  if (!name || !composeContent) {
+    return res
+      .status(400)
+      .json({ error: "Stack name and composeContent are required" });
+  }
 
-    if (!newPassword || newPassword.trim().length === 0) {
-      return res.status(400).json({ message: "New password is required" });
-    }
+  const stackDir = path.join(STACKS_DIR, name);
+  if (!fs.existsSync(stackDir)) {
+    fs.mkdirSync(stackDir, { recursive: true });
+  }
 
-    const targetUser = users.find((u) => u.id === id);
-    if (!targetUser) {
-      return res.status(404).json({ message: "User not found" });
-    }
+  const composePath = path.join(stackDir, "docker-compose.yml");
+  fs.writeFileSync(composePath, composeContent, "utf-8");
 
-    targetUser.passwordHash = await bcrypt.hash(newPassword, 10);
-
-    res.json({
-      message: `Password for user '${targetUser.username}' updated successfully.`,
+  try {
+    const { stdout, stderr } = await execAsync(
+      `docker compose -f "${composePath}" -p "${name}" up -d`,
+    );
+    res.json({ success: true, stdout, stderr });
+  } catch (err) {
+    res.status(500).json({
+      error: "Failed to deploy stack using docker compose",
+      details: err.message,
     });
-  },
-);
+  }
+});
+
+app.delete("/api/stacks/:name", async (req, res) => {
+  const { name } = req.params;
+  const stackDir = path.join(STACKS_DIR, name);
+  const composePath = path.join(stackDir, "docker-compose.yml");
+
+  try {
+    if (fs.existsSync(composePath)) {
+      await execAsync(`docker compose -f "${composePath}" -p "${name}" down`);
+      fs.rmSync(stackDir, { recursive: true, force: true });
+    } else {
+      await execAsync(`docker stack rm "${name}"`).catch(() => {});
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: "Failed to stop/remove stack", details: err.message });
+  }
+});
 
 // Fallback to React App
 app.get("*", (req, res) => {

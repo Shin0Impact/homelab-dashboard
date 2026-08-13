@@ -74,9 +74,16 @@ export function Metrics() {
   const [processes, setProcesses] = useState([])
   const [sortConfig, setSortConfig] = useState({ key: "cpu", direction: "desc" })
 
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem("homelab_token")
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  }
+
   const fetchMetrics = async () => {
     try {
-      const res = await fetch("/api/telemetry")
+      const res = await fetch("/api/telemetry", {
+        headers: getAuthHeaders(),
+      })
       if (!res.ok) throw new Error("Telemetry request failed")
 
       const data = await res.json()
@@ -132,7 +139,10 @@ export function Metrics() {
     const action = proc.status === "running" ? "stop" : "start"
 
     try {
-      await fetch(`/api/containers/${id}/${action}`, { method: "POST" })
+      await fetch(`/api/containers/${id}/${action}`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+      })
       fetchMetrics()
     } catch (e) {
       console.error(e)
@@ -158,7 +168,6 @@ export function Metrics() {
       }
 
       if (aVal === bVal) {
-        // Primary tie-breaker: CPU, secondary tie-breaker: Memory
         if (sortConfig.key !== "cpu") return b.cpu - a.cpu
         return b.memValue - a.memValue
       }
