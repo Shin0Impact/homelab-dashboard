@@ -1,4 +1,14 @@
 import React, { useState, useEffect } from "react"
+import { useSelector, useDispatch } from "react-redux"
+import {
+  setSettings,
+  addCategory,
+  removeCategory,
+  setCompact,
+  setAmoled,
+  setRefresh,
+  resetSettings,
+} from "../store/settingsSlice"
 import {
   Plus,
   X,
@@ -34,20 +44,15 @@ function Toggle({ on, onChange }) {
   )
 }
 
-const DEFAULT_CATEGORIES = ["AI", "Media", "Infra", "Network", "Automation"]
-
 export function Settings() {
-  const [categories, setCategories] = useState(() => {
-    const saved = localStorage.getItem("homelab_categories")
-    return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES
-  })
+  const dispatch = useDispatch()
+  const { categories, compact, amoled, refresh } = useSelector(
+    (state) => state.settings
+  )
+
   const [newCat, setNewCat] = useState("")
 
-  const [compact, setCompact] = useState(() => localStorage.getItem("homelab_compact") === "true")
-  const [amoled, setAmoled] = useState(() => localStorage.getItem("homelab_amoled") === "true")
-  const [refresh, setRefresh] = useState(() => Number(localStorage.getItem("homelab_refresh")) || 10)
-
-  // Users state
+  // User Management State
   const [users, setUsers] = useState([])
   const [newUser, setNewUser] = useState("")
   const [newPass, setNewPass] = useState("")
@@ -55,59 +60,43 @@ export function Settings() {
   const [userError, setUserError] = useState("")
   const [userSuccess, setUserSuccess] = useState("")
 
-  // Password editing state
+  // Inline Password Edit State
   const [editingUserId, setEditingUserId] = useState(null)
   const [editPassword, setEditPassword] = useState("")
 
   const token = localStorage.getItem("homelab_token")
 
-  // Sync settings with Backend API
+  // Load server settings on mount
   useEffect(() => {
     async function loadBackendSettings() {
       try {
         const res = await fetch("/api/settings")
         if (res.ok) {
           const data = await res.json()
-          if (Array.isArray(data.categories)) setCategories(data.categories)
-          if (data.compact !== undefined) setCompact(data.compact)
-          if (data.amoled !== undefined) setAmoled(data.amoled)
-          if (data.refresh !== undefined) setRefresh(data.refresh)
+          dispatch(setSettings(data))
         }
       } catch (err) {
         console.error("Failed to load server settings", err)
       }
     }
     loadBackendSettings()
-  }, [])
+  }, [dispatch])
 
+  // Sync settings state changes to backend API
   useEffect(() => {
-    localStorage.setItem("homelab_categories", JSON.stringify(categories))
-    localStorage.setItem("homelab_compact", compact)
-    localStorage.setItem("homelab_amoled", amoled)
-    localStorage.setItem("homelab_refresh", refresh)
+    if (!token) return
 
-    if (amoled) {
-      document.documentElement.classList.add("amoled")
-    } else {
-      document.documentElement.classList.remove("amoled")
-    }
-
-    window.dispatchEvent(new Event("homelab_settings_updated"))
-    window.dispatchEvent(new Event("homelab_categories_updated"))
-
-    // Save update to server
-    if (token) {
-      fetch("/api/settings", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ categories, compact, amoled, refresh }),
-      }).catch((e) => console.error("Failed sync settings to server", e))
-    }
+    fetch("/api/settings", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ categories, compact, amoled, refresh }),
+    }).catch((e) => console.error("Failed to sync settings to server", e))
   }, [categories, compact, amoled, refresh, token])
 
+  // Fetch Users List
   const fetchUsers = async () => {
     if (!token) return
     try {
@@ -127,6 +116,7 @@ export function Settings() {
     fetchUsers()
   }, [])
 
+  // User Action Handlers
   const handleAddUser = async (e) => {
     e.preventDefault()
     setUserError("")
@@ -198,16 +188,12 @@ export function Settings() {
     }
   }
 
-  function addCat() {
+  const handleAddCat = () => {
     const v = newCat.trim()
-    if (v && !categories.includes(v)) {
-      setCategories([...categories, v])
+    if (v) {
+      dispatch(addCategory(v))
       setNewCat("")
     }
-  }
-
-  function removeCat(category) {
-    setCategories(categories.filter((c) => c !== category))
   }
 
   const handleExport = () => {
@@ -227,10 +213,7 @@ export function Settings() {
       fileReader.onload = (event) => {
         try {
           const parsed = JSON.parse(event.target.result)
-          if (Array.isArray(parsed.categories)) setCategories(parsed.categories)
-          if (parsed.compact !== undefined) setCompact(parsed.compact)
-          if (parsed.amoled !== undefined) setAmoled(parsed.amoled)
-          if (parsed.refresh) setRefresh(parsed.refresh)
+          dispatch(setSettings(parsed))
         } catch {
           alert("Invalid backup file.")
         }
@@ -252,7 +235,10 @@ export function Settings() {
               className="flex items-center gap-1.5 rounded-full border border-white/10 bg-secondary/50 px-3 py-1 text-xs font-medium"
             >
               {c}
-              <button onClick={() => removeCat(c)} className="text-muted-foreground hover:text-destructive">
+              <button
+                onClick={() => dispatch(removeCategory(c))}
+                className="text-muted-foreground hover:text-destructive"
+              >
                 <X className="h-3 w-3" />
               </button>
             </span>
@@ -264,13 +250,13 @@ export function Settings() {
             value={newCat}
             onChange={(e) => setNewCat(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.nativeEvent.isComposing) addCat()
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) handleAddCat()
             }}
             placeholder="New category"
             className="flex-1 rounded-lg border border-white/10 bg-input/40 px-3 py-2 text-sm outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
           />
           <button
-            onClick={addCat}
+            onClick={handleAddCat}
             className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="h-4 w-4" />
@@ -290,7 +276,7 @@ export function Settings() {
               <p className="text-sm font-medium">Compact Mode</p>
               <p className="text-xs text-muted-foreground">Tighter cards and spacing.</p>
             </div>
-            <Toggle on={compact} onChange={setCompact} />
+            <Toggle on={compact} onChange={(val) => dispatch(setCompact(val))} />
           </div>
 
           <div className="flex items-center justify-between gap-4">
@@ -298,7 +284,7 @@ export function Settings() {
               <p className="text-sm font-medium">AMOLED Dark</p>
               <p className="text-xs text-muted-foreground">Pure-black background variant.</p>
             </div>
-            <Toggle on={amoled} onChange={setAmoled} />
+            <Toggle on={amoled} onChange={(val) => dispatch(setAmoled(val))} />
           </div>
 
           <div>
@@ -312,7 +298,7 @@ export function Settings() {
               max={60}
               step={5}
               value={refresh}
-              onChange={(e) => setRefresh(Number(e.target.value))}
+              onChange={(e) => dispatch(setRefresh(Number(e.target.value)))}
               className="mt-3 w-full cursor-pointer accent-[var(--primary)]"
             />
           </div>
@@ -362,6 +348,7 @@ export function Settings() {
           </button>
         </form>
 
+        {/* User Table / List */}
         <div className="mt-4 divide-y divide-white/5 border-t border-white/5 pt-2">
           {users.map((u) => (
             <div key={u.id} className="py-2.5">
@@ -406,7 +393,7 @@ export function Settings() {
                 </div>
               </div>
 
-              {/* Inline Password Edit Field */}
+              {/* Password Editing Field */}
               {editingUserId === u.id && (
                 <div className="mt-3 flex gap-2 pl-9">
                   <input
@@ -459,8 +446,7 @@ export function Settings() {
           <button
             onClick={() => {
               if (confirm("Reset settings to default values?")) {
-                localStorage.clear()
-                window.location.reload()
+                dispatch(resetSettings())
               }
             }}
             className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-2 text-xs font-medium text-destructive hover:bg-destructive/20"
