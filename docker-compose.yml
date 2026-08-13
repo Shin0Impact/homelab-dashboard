@@ -4,8 +4,7 @@ services:
     container_name: homelab-dashboard
     restart: unless-stopped
     ports:
-      - "3000:3000"
-      - "3001:3001"
+      - "3333:3000"
     volumes:
       # Mount host Docker socket read-only to monitor running containers
       - /var/run/docker.sock:/var/run/docker.sock
