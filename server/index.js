@@ -532,6 +532,31 @@ app.put("/api/services/:id", async (req, res) => {
   }
 });
 
+app.put(
+  "/api/users/:id/password",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.trim().length === 0) {
+      return res.status(400).json({ message: "New password is required" });
+    }
+
+    const targetUser = users.find((u) => u.id === id);
+    if (!targetUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    targetUser.passwordHash = await bcrypt.hash(newPassword, 10);
+
+    res.json({
+      message: `Password for user '${targetUser.username}' updated successfully.`,
+    });
+  },
+);
+
 // Fallback to React App
 app.get("*", (req, res) => {
   const indexPath = path.join(distPath, "index.html");
