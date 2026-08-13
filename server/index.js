@@ -175,6 +175,32 @@ app.post("/api/login", async (req, res) => {
   });
 });
 
+app.get("/api/tailscale", async (req, res) => {
+  try {
+    // Queries local host Tailscale CLI
+    const { stdout } = await execAsync("tailscale status --json");
+    const status = JSON.parse(stdout);
+
+    const isConnected = status.BackendState === "Running";
+    // Count connected peer devices + local host
+    const activePeers = status.Peer ? Object.keys(status.Peer).length : 0;
+    const totalDevices = isConnected ? activePeers + 1 : 0;
+
+    res.json({
+      connected: isConnected,
+      devicesCount: totalDevices,
+      tailnet: status.CurrentTailnet?.Name || "tailnet",
+    });
+  } catch (err) {
+    // Fallback if Tailscale CLI isn't installed or accessible on host
+    res.json({
+      connected: false,
+      devicesCount: 0,
+      tailnet: "disconnected",
+    });
+  }
+});
+
 app.get("/api/users", authenticateToken, requireAdmin, (req, res) => {
   const users = getUsers();
   const safeUsers = users.map(({ passwordHash, ...u }) => u);

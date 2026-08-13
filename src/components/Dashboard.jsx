@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import {
   Activity,
   Boxes,
@@ -24,13 +24,38 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState("All")
   const [loadingMap, setLoadingMap] = useState({})
+  
+  // Dynamic Tailscale State
+  const [tailscale, setTailscale] = useState({
+    connected: false,
+    devicesCount: 0,
+    loading: true,
+  })
 
   // Subscribe to settings customization
   const isCompact = useCompactMode()
 
+  // Fetch Tailscale Telemetry
+  const fetchTailscaleStatus = async () => {
+    try {
+      const res = await fetch("/api/tailscale")
+      if (res.ok) {
+        const data = await res.json()
+        setTailscale({ ...data, loading: false })
+      }
+    } catch {
+      setTailscale({ connected: false, devicesCount: 0, loading: false })
+    }
+  }
+
+  useEffect(() => {
+    fetchTailscaleStatus()
+  }, [])
+
   // Polling auto-refresh using dynamic slider setting
   useDynamicPolling(() => {
     if (onRefresh) onRefresh()
+    fetchTailscaleStatus()
   })
 
   // Helper to determine if service is online regardless of backend property naming
@@ -152,19 +177,31 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
           </p>
         </div>
 
-        {/* Tailscale */}
+        {/* Tailscale Stat Card (Dynamic) */}
         <div className={`rounded-xl transition-all ${isCompact ? "p-2.5" : "p-4"} ${glass}`}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">
               Tailscale
             </span>
-            <div className={`flex items-center justify-center rounded-lg bg-purple-500/15 text-purple-400 ${isCompact ? "h-6 w-6" : "h-8 w-8"}`}>
+            <div className={`flex items-center justify-center rounded-lg ${
+              tailscale.connected 
+                ? "bg-purple-500/15 text-purple-400" 
+                : "bg-red-500/15 text-red-400"
+            } ${isCompact ? "h-6 w-6" : "h-8 w-8"}`}>
               <Wifi className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
             </div>
           </div>
-          <p className={`font-bold ${isCompact ? "mt-1 text-lg" : "mt-2 text-xl"}`}>Connected</p>
-          <p className="text-[11px] text-muted-foreground">
-            4 devices in tailnet
+          <p className={`font-bold ${isCompact ? "mt-1 text-lg" : "mt-2 text-xl"}`}>
+            {tailscale.loading 
+              ? "Checking..." 
+              : tailscale.connected 
+              ? "Connected" 
+              : "Disconnected"}
+          </p>
+          <p className="text-[11px] text-muted-foreground truncate">
+            {tailscale.connected 
+              ? `${tailscale.devicesCount} devices in tailnet` 
+              : "Mesh VPN offline"}
           </p>
         </div>
       </div>
