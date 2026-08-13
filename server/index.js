@@ -145,8 +145,10 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
       const rawName = container.Names[0]
         ? container.Names[0].replace("/", "")
         : "unnamed";
-      const cleanName = rawName.toLowerCase();
-      const meta = inferCategoryAndIcon(rawName, container.Image);
+
+      // Extract real Docker Compose project name, or default to "standalone"
+      const stackName =
+        container.Labels?.["com.docker.compose.project"] || "standalone";
 
       // Match by container ID OR raw container name so updates persist
       const custom =
@@ -196,6 +198,8 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
         id: container.Id,
         containerName: rawName,
         name: custom.name || rawName,
+        stack: stackName, // <--- Send stack name directly to frontend
+        labels: container.Labels || {}, // <--- Include raw labels
         status: container.State === "running" ? "online" : "offline",
         online: container.State === "running",
         state: container.State,

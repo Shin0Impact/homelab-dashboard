@@ -9,27 +9,30 @@ export function Stacks({ services = [], onRefresh }) {
 
   const safeServices = Array.isArray(services) ? services : []
 
-  // Group individual containers by their Docker Compose project/stack label if available,
-  // or fall back to grouping common service prefixes.
-  const stacksMap = safeServices.reduce((acc, container) => {
-    // Docker Compose usually sets label 'com.docker.compose.project'
-    // Fall back to splitting container name by '_' or '-' if present
+    // Group individual containers by their Docker Compose project/stack label if available,
+    // or fall back to grouping common service prefixes.
+    const stacksMap = safeServices.reduce((acc, container) => {
+    // 1. Prefer backend-parsed stack property
+    // 2. Check compose project label directly
+    // 3. Group remaining unstacked containers into "standalone"
     const stackName =
-      container.labels?.["com.docker.compose.project"] ||
-      container.containerName?.split(/[-_]/)[0] ||
-      "standalone"
+    container.stack ||
+    container.labels?.["com.docker.compose.project"] ||
+    "standalone"
+
+    const displayName = stackName === "standalone" ? "Standalone Services" : stackName
 
     if (!acc[stackName]) {
-      acc[stackName] = {
-        name: stackName,
+    acc[stackName] = {
+        name: displayName,
+        rawKey: stackName,
         containers: [],
-        status: "running",
-      }
+        }
     }
 
     acc[stackName].containers.push(container)
     return acc
-  }, {})
+    }, {})
 
   const stackList = Object.values(stacksMap)
 
