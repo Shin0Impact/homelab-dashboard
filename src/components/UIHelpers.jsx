@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Bot,
   Cctv,
@@ -79,4 +79,47 @@ export function CategoryTag({ category }) {
       {category}
     </span>
   );
+}
+
+// --- Custom Hooks for Appearance Settings ---
+
+export function useCompactMode() {
+  const [isCompact, setIsCompact] = useState(() => {
+    return localStorage.getItem("homelab_compact") === "true";
+  });
+
+  useEffect(() => {
+    const handleSettingsChange = () => {
+      setIsCompact(localStorage.getItem("homelab_compact") === "true");
+    };
+
+    window.addEventListener("homelab_settings_updated", handleSettingsChange);
+    return () => window.removeEventListener("homelab_settings_updated", handleSettingsChange);
+  }, []);
+
+  return isCompact;
+}
+
+export function useDynamicPolling(callback) {
+  const [intervalTime, setIntervalTime] = useState(() => {
+    return (Number(localStorage.getItem("homelab_refresh")) || 10) * 1000;
+  });
+
+  useEffect(() => {
+    const handleSettingsChange = () => {
+      const savedRefresh = Number(localStorage.getItem("homelab_refresh")) || 10;
+      setIntervalTime(savedRefresh * 1000);
+    };
+
+    window.addEventListener("homelab_settings_updated", handleSettingsChange);
+    return () => window.removeEventListener("homelab_settings_updated", handleSettingsChange);
+  }, []);
+
+  useEffect(() => {
+    if (!callback) return;
+    const timer = setInterval(() => {
+      callback();
+    }, intervalTime);
+    return () => clearInterval(timer);
+  }, [intervalTime, callback]);
 }

@@ -22,30 +22,35 @@ function Toggle({ on, onChange }) {
   )
 }
 
-// Default fallback categories
 const DEFAULT_CATEGORIES = ["AI", "Media", "Infra", "Network", "Automation"]
 
 export function Settings() {
-  // Load categories from LocalStorage
   const [categories, setCategories] = useState(() => {
     const saved = localStorage.getItem("homelab_categories")
     return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES
   })
   const [newCat, setNewCat] = useState("")
 
-  // Clean appearance & behavior states
   const [compact, setCompact] = useState(() => localStorage.getItem("homelab_compact") === "true")
   const [amoled, setAmoled] = useState(() => localStorage.getItem("homelab_amoled") === "true")
   const [refresh, setRefresh] = useState(() => Number(localStorage.getItem("homelab_refresh")) || 10)
 
-  // Save changes to LocalStorage and broadcast event to other components
+  // Save changes & apply settings dynamically
   useEffect(() => {
     localStorage.setItem("homelab_categories", JSON.stringify(categories))
     localStorage.setItem("homelab_compact", compact)
     localStorage.setItem("homelab_amoled", amoled)
     localStorage.setItem("homelab_refresh", refresh)
 
-    // Broadcast category update to the rest of the application
+    // 1. Toggle AMOLED background globally
+    if (amoled) {
+      document.documentElement.classList.add("amoled")
+    } else {
+      document.documentElement.classList.remove("amoled")
+    }
+
+    // 2. Broadcast updates across the app (for Compact Mode, Categories, and Polling)
+    window.dispatchEvent(new Event("homelab_settings_updated"))
     window.dispatchEvent(new Event("homelab_categories_updated"))
   }, [categories, compact, amoled, refresh])
 
@@ -61,7 +66,6 @@ export function Settings() {
     setCategories(categories.filter((c) => c !== category))
   }
 
-  // Backup & Restore
   const handleExport = () => {
     const data = { categories, compact, amoled, refresh }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
@@ -104,10 +108,7 @@ export function Settings() {
               className="flex items-center gap-1.5 rounded-full border border-white/10 bg-secondary/50 px-3 py-1 text-xs font-medium"
             >
               {c}
-              <button
-                onClick={() => removeCat(c)}
-                className="text-muted-foreground hover:text-destructive"
-              >
+              <button onClick={() => removeCat(c)} className="text-muted-foreground hover:text-destructive">
                 <X className="h-3 w-3" />
               </button>
             </span>

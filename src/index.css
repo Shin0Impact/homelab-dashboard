@@ -44,3 +44,9 @@ body {
     -apple-system,
     sans-serif;
 }
+
+html.amoled,
+html.amoled body {
+  background-color: #000000 !important;
+  --background: #000000;
+}

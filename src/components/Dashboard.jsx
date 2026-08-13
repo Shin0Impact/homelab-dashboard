@@ -11,12 +11,27 @@ import {
   Square,
   Loader2,
 } from "lucide-react"
-import { CategoryTag, ServiceIcon, StatusDot, glass } from "./UIHelpers"
+import {
+  CategoryTag,
+  ServiceIcon,
+  StatusDot,
+  glass,
+  useCompactMode,
+  useDynamicPolling,
+} from "./UIHelpers"
 
 export function Dashboard({ services = [], categories = [], onRefresh }) {
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState("All")
   const [loadingMap, setLoadingMap] = useState({})
+
+  // Subscribe to settings customization
+  const isCompact = useCompactMode()
+
+  // Polling auto-refresh using dynamic slider setting
+  useDynamicPolling(() => {
+    if (onRefresh) onRefresh()
+  })
 
   // Helper to determine if service is online regardless of backend property naming
   const checkIsOnline = (s) => s.online || s.status === "online" || s.state === "running"
@@ -59,9 +74,8 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
     }
   }
 
-  // Helper to resolve URL using current browser host (Tailscale / SSH support)
+  // Helper to resolve URL using current browser host
   const getLaunchUrl = (s) => {
-    // 1. Direct explicit port or extracted port
     const detectedPort =
       s.port ||
       (Array.isArray(s.ports) && s.ports.find((p) => p.PublicPort)?.PublicPort)
@@ -70,7 +84,6 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
       return `${window.location.protocol}//${window.location.hostname}:${detectedPort}`
     }
 
-    // 2. Normalize hardcoded localhost URLs to current browser host
     if (s.url && s.url !== "#") {
       try {
         const parsed = new URL(s.url)
@@ -88,68 +101,68 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
   }
 
   return (
-    <div className="w-full space-y-5 p-4 sm:p-6 md:p-8">
+    <div className={`w-full transition-all ${isCompact ? "space-y-3 p-3 sm:p-4" : "space-y-5 p-4 sm:p-6 md:p-8"}`}>
       {/* 1. Stat Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className={`grid grid-cols-2 lg:grid-cols-4 ${isCompact ? "gap-2" : "gap-3"}`}>
         {/* Total Containers */}
-        <div className={`rounded-xl p-4 ${glass}`}>
+        <div className={`rounded-xl transition-all ${isCompact ? "p-2.5" : "p-4"} ${glass}`}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">
               Total Containers
             </span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15 text-primary">
-              <Boxes className="h-4 w-4" />
+            <div className={`flex items-center justify-center rounded-lg bg-primary/15 text-primary ${isCompact ? "h-6 w-6" : "h-8 w-8"}`}>
+              <Boxes className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
             </div>
           </div>
-          <p className="mt-2 text-2xl font-bold">{totalContainers}</p>
+          <p className={`font-bold ${isCompact ? "mt-1 text-xl" : "mt-2 text-2xl"}`}>{totalContainers}</p>
           <p className="text-[11px] text-muted-foreground">
             Discovered via Socket
           </p>
         </div>
 
         {/* Services Online */}
-        <div className={`rounded-xl p-4 ${glass}`}>
+        <div className={`rounded-xl transition-all ${isCompact ? "p-2.5" : "p-4"} ${glass}`}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">
               Services Online
             </span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400">
-              <Activity className="h-4 w-4" />
+            <div className={`flex items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400 ${isCompact ? "h-6 w-6" : "h-8 w-8"}`}>
+              <Activity className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
             </div>
           </div>
-          <p className="mt-2 text-2xl font-bold">{onlineCount}</p>
+          <p className={`font-bold ${isCompact ? "mt-1 text-xl" : "mt-2 text-2xl"}`}>{onlineCount}</p>
           <p className="text-[11px] text-muted-foreground">
             {offlineCount} offline
           </p>
         </div>
 
         {/* Storage */}
-        <div className={`rounded-xl p-4 ${glass}`}>
+        <div className={`rounded-xl transition-all ${isCompact ? "p-2.5" : "p-4"} ${glass}`}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">
               Storage
             </span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400">
-              <HardDrive className="h-4 w-4" />
+            <div className={`flex items-center justify-center rounded-lg bg-amber-500/15 text-amber-400 ${isCompact ? "h-6 w-6" : "h-8 w-8"}`}>
+              <HardDrive className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
             </div>
           </div>
-          <p className="mt-2 text-2xl font-bold">2.4 TB</p>
+          <p className={`font-bold ${isCompact ? "mt-1 text-xl" : "mt-2 text-2xl"}`}>2.4 TB</p>
           <p className="text-[11px] text-muted-foreground">
             of 4 TB pool used
           </p>
         </div>
 
         {/* Tailscale */}
-        <div className={`rounded-xl p-4 ${glass}`}>
+        <div className={`rounded-xl transition-all ${isCompact ? "p-2.5" : "p-4"} ${glass}`}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">
               Tailscale
             </span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/15 text-purple-400">
-              <Wifi className="h-4 w-4" />
+            <div className={`flex items-center justify-center rounded-lg bg-purple-500/15 text-purple-400 ${isCompact ? "h-6 w-6" : "h-8 w-8"}`}>
+              <Wifi className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
             </div>
           </div>
-          <p className="mt-2 text-xl font-bold">Connected</p>
+          <p className={`font-bold ${isCompact ? "mt-1 text-lg" : "mt-2 text-xl"}`}>Connected</p>
           <p className="text-[11px] text-muted-foreground">
             4 devices in tailnet
           </p>
@@ -157,9 +170,9 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
       </div>
 
       {/* 2. Search Bar & Horizontal Category Scroll */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between ${isCompact ? "gap-2" : "gap-3"}`}>
         <div
-          className={`flex items-center gap-2 rounded-xl px-3.5 py-2.5 sm:w-72 ${glass}`}
+          className={`flex items-center gap-2 rounded-xl px-3.5 sm:w-72 ${isCompact ? "py-1.5" : "py-2.5"} ${glass}`}
         >
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
           <input
@@ -176,7 +189,9 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              className={`shrink-0 rounded-full border transition-colors ${
+                isCompact ? "px-2.5 py-0.5 text-[11px]" : "px-3 py-1 text-xs"
+              } font-medium ${
                 filter === f
                   ? "border-primary/40 bg-primary/20 text-primary"
                   : "border-white/5 bg-secondary/30 text-muted-foreground hover:text-foreground"
@@ -189,7 +204,7 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
       </div>
 
       {/* 3. Responsive Container Grid */}
-      <div className="grid grid-cols-1 gap-3.5 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className={`grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 ${isCompact ? "gap-2.5" : "gap-3.5"}`}>
         {filteredServices.map((s) => {
           const isOnline = checkIsOnline(s)
           const computedUrl = getLaunchUrl(s)
@@ -198,14 +213,18 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
           return (
             <div
               key={s.id}
-              className={`flex flex-col justify-between rounded-2xl p-4 transition-all hover:bg-secondary/20 ${glass}`}
+              className={`flex flex-col justify-between rounded-2xl transition-all hover:bg-secondary/20 ${
+                isCompact ? "p-3" : "p-4"
+              } ${glass}`}
             >
               <div>
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary/80 ring-1 ring-white/5">
-                    <ServiceIcon service={s} className="h-6 w-6" />
+                  <div className={`flex items-center justify-center rounded-xl bg-secondary/80 ring-1 ring-white/5 ${
+                    isCompact ? "h-9 w-9" : "h-11 w-11"
+                  }`}>
+                    <ServiceIcon service={s} className={isCompact ? "h-5 w-5" : "h-6 w-6"} />
                   </div>
-                  <div className="flex items-center gap-1.5 rounded-full bg-secondary/50 px-2.5 py-1">
+                  <div className="flex items-center gap-1.5 rounded-full bg-secondary/50 px-2.5 py-0.5">
                     <StatusDot online={isOnline} />
                     <span className="text-[11px] font-medium">
                       {isOnline ? "Running" : "Exited"}
@@ -213,8 +232,8 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
                   </div>
                 </div>
 
-                <div className="mt-3">
-                  <h3 className="truncate text-base font-semibold">{s.name}</h3>
+                <div className={isCompact ? "mt-2" : "mt-3"}>
+                  <h3 className={`truncate font-semibold ${isCompact ? "text-sm" : "text-base"}`}>{s.name}</h3>
                   <div className="mt-1 flex items-center gap-2">
                     <CategoryTag category={s.category} />
                     <span className="truncate font-mono text-[11px] text-muted-foreground">
@@ -225,14 +244,18 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
               </div>
 
               {/* Action Buttons */}
-              <div className="mt-4 flex items-center justify-between gap-2 border-t border-white/5 pt-3">
+              <div className={`flex items-center justify-between gap-2 border-t border-white/5 ${
+                isCompact ? "mt-3 pt-2" : "mt-4 pt-3"
+              }`}>
                 <div className="flex items-center gap-1.5">
                   {/* Start / Stop Action Button */}
                   <button
                     onClick={() => handleToggleContainer(s)}
                     disabled={isLoading}
                     title={isOnline ? "Stop Container" : "Start Container"}
-                    className={`flex h-9 w-9 items-center justify-center rounded-lg border transition-colors ${
+                    className={`flex items-center justify-center rounded-lg border transition-colors ${
+                      isCompact ? "h-8 w-8" : "h-9 w-9"
+                    } ${
                       isOnline
                         ? "border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20"
                         : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
@@ -251,7 +274,9 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
                   {onRefresh && (
                     <button
                       onClick={onRefresh}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/40 text-muted-foreground hover:text-foreground"
+                      className={`flex items-center justify-center rounded-lg bg-secondary/40 text-muted-foreground hover:text-foreground ${
+                        isCompact ? "h-8 w-8" : "h-9 w-9"
+                      }`}
                     >
                       <RefreshCw className="h-4 w-4" />
                     </button>
@@ -264,7 +289,9 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
                     href={computedUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-center gap-2 rounded-xl bg-primary/15 px-4 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/25"
+                    className={`flex items-center gap-2 rounded-xl bg-primary/15 font-semibold text-primary transition-colors hover:bg-primary/25 ${
+                      isCompact ? "px-3 py-1.5 text-[11px]" : "px-4 py-2 text-xs"
+                    }`}
                   >
                     Launch
                     <ExternalLink className="h-3.5 w-3.5" />
@@ -272,7 +299,9 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
                 ) : (
                   <button
                     disabled
-                    className="rounded-xl bg-secondary/30 px-4 py-2 text-xs font-medium text-muted-foreground/50 cursor-not-allowed"
+                    className={`rounded-xl bg-secondary/30 font-medium text-muted-foreground/50 cursor-not-allowed ${
+                      isCompact ? "px-3 py-1.5 text-[11px]" : "px-4 py-2 text-xs"
+                    }`}
                   >
                     No Port
                   </button>
