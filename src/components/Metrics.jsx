@@ -47,9 +47,7 @@ function ChartCard({ title, subtitle, icon: Icon, children }) {
           <p className="text-xs text-muted-foreground">{subtitle}</p>
         </div>
       </div>
-      <div className="w-full min-h-[200px]">
-        {children}
-      </div>
+      <div className="w-full min-h-[200px]">{children}</div>
     </div>
   )
 }
@@ -58,12 +56,11 @@ export function Metrics() {
   const [cpuHistory, setCpuHistory] = useState([])
   const [netHistory, setNetHistory] = useState([])
   const [ramData, setRamData] = useState([
-    { name: "Used RAM", value: 4.2 },
-    { name: "Free RAM", value: 11.8 },
+    { name: "Used RAM", value: 3.2 },
+    { name: "Free RAM", value: 4.5 },
   ])
-  const [totalRam, setTotalRam] = useState("16")
+  const [totalRam, setTotalRam] = useState("8")
   const [errorMsg, setErrorMsg] = useState(null)
-
   const [processes, setProcesses] = useState([])
 
   const fetchMetrics = async () => {
@@ -90,7 +87,7 @@ export function Metrics() {
       }
 
       if (data.net) {
-        setNetHistory((prev) => [...prev, { t: timeStr, down: data.net?.down || 0, up: data.net?.up || 0 }].slice(-20))
+        setNetHistory((prev) => [...prev, { t: timeStr, down: data.net.down || 0, up: data.net.up || 0 }].slice(-20))
       }
 
       if (data.ram) {
@@ -99,7 +96,9 @@ export function Metrics() {
       }
 
       if (data.processes) {
-        setProcesses(data.processes)
+        // Keep sorted by CPU usage descending
+        const sorted = [...data.processes].sort((a, b) => (b.cpu || 0) - (a.cpu || 0))
+        setProcesses(sorted)
       }
     } catch (err) {
       console.warn("Live telemetry issue:", err.message)
@@ -241,6 +240,8 @@ export function Metrics() {
               <tr className="border-b border-white/5 text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="px-5 py-3 font-medium">Process / Container</th>
                 <th className="px-5 py-3 font-medium">PID</th>
+                <th className="px-5 py-3 font-medium">CPU Usage</th>
+                <th className="px-5 py-3 font-medium">Memory</th>
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 text-right font-medium">Action</th>
               </tr>
@@ -255,6 +256,8 @@ export function Metrics() {
                     </div>
                   </td>
                   <td className="px-5 py-3 font-mono text-xs text-muted-foreground">{p.pid}</td>
+                  <td className="px-5 py-3 font-mono text-xs text-cyan-400">{p.cpu ?? 0}%</td>
+                  <td className="px-5 py-3 font-mono text-xs text-purple-400">{p.mem ?? "0 MB"}</td>
                   <td className="px-5 py-3">
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
@@ -290,43 +293,6 @@ export function Metrics() {
               ))}
             </tbody>
           </table>
-        </div>
-
-        {/* Mobile Task Cards Stack */}
-        <div className="space-y-3 md:hidden">
-          {processes.map((p) => (
-            <div key={p.id} className={`rounded-xl p-4 ${glass}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Terminal className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-semibold">{p.name}</span>
-                </div>
-                <span className="font-mono text-[11px] text-muted-foreground">PID: {p.pid}</span>
-              </div>
-
-              <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-2.5">
-                <span
-                  className={`text-xs font-medium ${
-                    p.status === "running" ? "text-emerald-400" : "text-red-400"
-                  }`}
-                >
-                  ● {p.status}
-                </span>
-
-                <button
-                  onClick={() => handleToggleProcess(p.id)}
-                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium ${
-                    p.status === "running"
-                      ? "bg-red-500/15 text-red-400"
-                      : "bg-emerald-500/15 text-emerald-400"
-                  }`}
-                >
-                  {p.status === "running" ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3" />}
-                  {p.status === "running" ? "Stop" : "Start"}
-                </button>
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     </div>
