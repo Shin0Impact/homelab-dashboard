@@ -10,7 +10,7 @@ import { Settings } from "./components/Settings"
 const PAGE_META = {
   dashboard: { title: "Dashboard", subtitle: "Live Container Monitor" },
   manage: { title: "Manage Services", subtitle: "Configure & Register Endpoints" },
-  containers: { title: "Container Control", subtitle: "Start, Stop & Restart Runtime Instances" },
+  "manage-containers": { title: "Container Control", subtitle: "Start, Stop & Restart Runtime Instances" },
   metrics: { title: "System Telemetry", subtitle: "Host Resource Utilization" },
   settings: { title: "Settings", subtitle: "Preferences & System Configuration" },
 }
@@ -127,10 +127,9 @@ export default function App() {
               onDelete={handleDeleteService}
             />
           )}
-          {page === "containers" && (
+          {page === "manage-containers" && (
             <ContainerManagement
               services={services}
-              services={containersList}
               onRefresh={fetchContainers}
             />
           )}

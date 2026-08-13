@@ -1,14 +1,12 @@
 import React, { useState } from "react"
 import { Search, Play, Square, RotateCw, Server, AlertCircle } from "lucide-react"
 
-// Self-contained glass styling fallback so it never defaults to pitch black
 const glassStyle = "backdrop-blur-md bg-zinc-900/40 border border-white/10 shadow-2xl"
 
 export function ContainerManagement({ services = [], onRefresh }) {
   const [search, setSearch] = useState("")
   const [loadingId, setLoadingId] = useState(null)
 
-  // Ensure services is always an array
   const safeServices = Array.isArray(services) ? services : []
 
   const handleAction = async (id, action) => {
@@ -52,7 +50,7 @@ export function ContainerManagement({ services = [], onRefresh }) {
         </div>
       </div>
 
-      {/* Container Cards List */}
+      {/* Container List */}
       <div className="grid grid-cols-1 gap-3">
         {filteredServices.map((c) => {
           const isOnline = c.status === "online" || c.online || c.state === "running"
@@ -120,7 +118,6 @@ export function ContainerManagement({ services = [], onRefresh }) {
           )
         })}
 
-        {/* Empty / Error Fallback View */}
         {filteredServices.length === 0 && (
           <div className={`p-8 text-center text-sm text-zinc-400 rounded-xl flex flex-col items-center gap-2 ${glassStyle}`}>
             <AlertCircle className="h-6 w-6 text-zinc-500" />
