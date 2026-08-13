@@ -54,3 +54,20 @@ html.amoled #root {
   --color-card: oklch(0.08 0 0) !important;
   --color-sidebar: #000000 !important;
 }
+
+/* Light Mode Override for Tailwind v4 */
+html.light,
+html.light body,
+html.light #root {
+  background-color: oklch(0.97 0 0) !important;
+  --color-background: oklch(0.97 0 0) !important;
+  --color-foreground: oklch(0.15 0.01 260) !important;
+  --color-card: oklch(1 0 0) !important;
+  --color-card-foreground: oklch(0.15 0.01 260) !important;
+  --color-sidebar: oklch(0.94 0 0) !important;
+  --color-secondary: oklch(0.92 0 0) !important;
+  --color-secondary-foreground: oklch(0.15 0.01 260) !important;
+  --color-muted-foreground: oklch(0.45 0.01 260) !important;
+  --color-border: oklch(0.88 0 0) !important;
+  --color-input: oklch(0.92 0 0) !important;
+}

@@ -5,7 +5,7 @@ import {
   addCategory,
   removeCategory,
   setCompact,
-  setAmoled,
+  setTheme,
   setRefresh,
   resetSettings,
 } from "../store/settingsSlice"
@@ -21,6 +21,9 @@ import {
   User as UserIcon,
   KeyRound,
   Check,
+  Moon,
+  Sun,
+  Sparkles,
 } from "lucide-react"
 
 const glass =
@@ -44,9 +47,15 @@ function Toggle({ on, onChange }) {
   )
 }
 
+const THEME_OPTIONS = [
+  { id: "default", label: "Default Dark", icon: Moon },
+  { id: "amoled", label: "AMOLED Dark", icon: Sparkles },
+  { id: "light", label: "Light Mode", icon: Sun },
+]
+
 export function Settings() {
   const dispatch = useDispatch()
-  const { categories, compact, amoled, refresh } = useSelector(
+  const { categories, compact, theme = "default", refresh } = useSelector(
     (state) => state.settings
   )
 
@@ -68,10 +77,6 @@ export function Settings() {
 
   const handleAuthError = () => {
     setUserError("Session expired. Please sign out and log back in.")
-    // Optional: force logout if token is invalid
-    // localStorage.removeItem("homelab_authed")
-    // localStorage.removeItem("homelab_token")
-    // window.location.reload()
   }
 
   // Load server settings on mount
@@ -107,9 +112,9 @@ export function Settings() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ categories, compact, amoled, refresh }),
+      body: JSON.stringify({ categories, compact, theme, refresh }),
     }).catch((e) => console.error("Failed to sync settings to server", e))
-  }, [categories, compact, amoled, refresh, token])
+  }, [categories, compact, theme, refresh, token])
 
   // Fetch Users List
   const fetchUsers = async () => {
@@ -223,7 +228,7 @@ export function Settings() {
   }
 
   const handleExport = () => {
-    const data = { categories, compact, amoled, refresh }
+    const data = { categories, compact, theme, refresh }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -297,20 +302,39 @@ export function Settings() {
         <p className="mt-1 text-sm text-muted-foreground">Customize dashboard UI behavior.</p>
 
         <div className="mt-5 space-y-5">
+          {/* Theme Selector */}
+          <div>
+            <p className="text-sm font-medium">Theme Mode</p>
+            <p className="text-xs text-muted-foreground mb-2.5">Select active color scheme.</p>
+            <div className="grid grid-cols-3 gap-2">
+              {THEME_OPTIONS.map((t) => {
+                const Icon = t.icon
+                const isActive = theme === t.id
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => dispatch(setTheme(t.id))}
+                    className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border p-2.5 text-xs font-medium transition-all ${
+                      isActive
+                        ? "border-primary bg-primary/15 text-primary ring-1 ring-primary/25"
+                        : "border-white/10 bg-secondary/40 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{t.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-medium">Compact Mode</p>
               <p className="text-xs text-muted-foreground">Tighter cards and spacing.</p>
             </div>
             <Toggle on={compact} onChange={(val) => dispatch(setCompact(val))} />
-          </div>
-
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium">AMOLED Dark</p>
-              <p className="text-xs text-muted-foreground">Pure-black background variant.</p>
-            </div>
-            <Toggle on={amoled} onChange={(val) => dispatch(setAmoled(val))} />
           </div>
 
           <div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react"
-import { useDispatch } from "react-redux"
+import { useDispatch, useSelector } from "react-redux"
 import { updateTelemetryData, setTelemetryError } from "./store/telemetrySlice"
 import { Dashboard } from "./components/Dashboard"
 import { Login } from "./components/Login"
@@ -8,7 +8,6 @@ import { Stacks } from "./components/Stacks"
 import { Metrics } from "./components/Metrics"
 import { Sidebar, Topbar } from "./components/Navigation"
 import { Settings } from "./components/Settings"
-import { useSelector } from "react-redux"
 
 const PAGE_META = {
   dashboard: { title: "Dashboard", subtitle: "Live Container Monitor" },
@@ -29,12 +28,26 @@ export default function App() {
   const [services, setServices] = useState([])
   const [categories, setCategories] = useState([])
 
+  const theme = useSelector((state) => state.settings.theme || "default")
+
+  // Sync active theme class onto html root element
+  useEffect(() => {
+    const root = document.documentElement
+    root.classList.remove("amoled", "light")
+
+    if (theme === "amoled") {
+      root.classList.add("amoled")
+    } else if (theme === "light") {
+      root.classList.add("light")
+    }
+  }, [theme])
+
   const getAuthHeaders = useCallback(() => {
     const token = localStorage.getItem("homelab_token")
     return token ? { Authorization: `Bearer ${token}` } : {}
   }, [])
 
-  // Global Telemetry Polling Loop (Runs at App level so state never drops)
+  // Global Telemetry Polling Loop
   useEffect(() => {
     if (!authed) return
 
@@ -97,15 +110,6 @@ export default function App() {
       console.error("Failed to add service:", err)
     }
   }
-  const amoled = useSelector((state) => state.settings.amoled)
-
-  useEffect(() => {
-    if (amoled) {
-      document.documentElement.classList.add("amoled")
-    } else {
-      document.documentElement.classList.remove("amoled")
-    }
-  }, [amoled])
 
   const handleUpdateService = async (updatedService) => {
     try {
@@ -136,9 +140,7 @@ export default function App() {
   }
 
   const handleLogin = (data) => {
-    // Extract the token string safely if 'data' is the full response object
     const token = typeof data === "object" ? data.token : data
-
     if (token) localStorage.setItem("homelab_token", token)
     localStorage.setItem("homelab_authed", "true")
     setAuthed(true)
