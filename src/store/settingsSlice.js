@@ -1,16 +1,20 @@
 import { createSlice } from "@reduxjs/toolkit";
 
 const DEFAULT_CATEGORIES = ["AI", "Media", "Infra", "Network", "Automation"];
+const DEFAULT_USERS = [
+  { id: "1", username: "admin", role: "Admin", email: "root@homelab" },
+];
 
-// Helper to load initial settings from localStorage
 const loadInitialSettings = () => {
   try {
     const savedCat = localStorage.getItem("homelab_categories");
+    const savedUsers = localStorage.getItem("homelab_users");
     return {
       categories: savedCat ? JSON.parse(savedCat) : DEFAULT_CATEGORIES,
       compact: localStorage.getItem("homelab_compact") === "true",
       amoled: localStorage.getItem("homelab_amoled") === "true",
       refresh: Number(localStorage.getItem("homelab_refresh")) || 10,
+      users: savedUsers ? JSON.parse(savedUsers) : DEFAULT_USERS,
     };
   } catch {
     return {
@@ -18,6 +22,7 @@ const loadInitialSettings = () => {
       compact: false,
       amoled: false,
       refresh: 10,
+      users: DEFAULT_USERS,
     };
   }
 };
@@ -34,7 +39,7 @@ const settingsSlice = createSlice({
       );
     },
     addCategory: (state, action) => {
-      if (!state.categories.includes(action.payload)) {
+      if (action.payload && !state.categories.includes(action.payload)) {
         state.categories.push(action.payload);
         localStorage.setItem(
           "homelab_categories",
@@ -66,12 +71,26 @@ const settingsSlice = createSlice({
       state.refresh = action.payload;
       localStorage.setItem("homelab_refresh", action.payload);
     },
-    importSettings: (state, action) => {
-      const { categories, compact, amoled, refresh } = action.payload;
-      if (categories) state.categories = categories;
-      if (compact !== undefined) state.compact = compact;
-      if (amoled !== undefined) state.amoled = amoled;
-      if (refresh) state.refresh = refresh;
+    addUser: (state, action) => {
+      state.users.push(action.payload);
+      localStorage.setItem("homelab_users", JSON.stringify(state.users));
+    },
+    removeUser: (state, action) => {
+      state.users = state.users.filter((u) => u.id !== action.payload);
+      localStorage.setItem("homelab_users", JSON.stringify(state.users));
+    },
+    resetSettings: (state) => {
+      state.categories = DEFAULT_CATEGORIES;
+      state.compact = false;
+      state.amoled = false;
+      state.refresh = 10;
+      state.users = DEFAULT_USERS;
+      localStorage.removeItem("homelab_categories");
+      localStorage.removeItem("homelab_compact");
+      localStorage.removeItem("homelab_amoled");
+      localStorage.removeItem("homelab_refresh");
+      localStorage.removeItem("homelab_users");
+      document.documentElement.classList.remove("amoled");
     },
   },
 });
@@ -83,7 +102,9 @@ export const {
   setCompact,
   setAmoled,
   setRefresh,
-  importSettings,
+  addUser,
+  removeUser,
+  resetSettings,
 } = settingsSlice.actions;
 
 export default settingsSlice.reducer;

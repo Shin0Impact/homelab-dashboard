@@ -8,6 +8,7 @@ import { Stacks } from "./components/Stacks"
 import { Metrics } from "./components/Metrics"
 import { Sidebar, Topbar } from "./components/Navigation"
 import { Settings } from "./components/Settings"
+import { useSelector } from "react-redux"
 
 const PAGE_META = {
   dashboard: { title: "Dashboard", subtitle: "Live Container Monitor" },
@@ -96,6 +97,15 @@ export default function App() {
       console.error("Failed to add service:", err)
     }
   }
+  const amoled = useSelector((state) => state.settings.amoled)
+
+  useEffect(() => {
+    if (amoled) {
+      document.documentElement.classList.add("amoled")
+    } else {
+      document.documentElement.classList.remove("amoled")
+    }
+  }, [amoled])
 
   const handleUpdateService = async (updatedService) => {
     try {
