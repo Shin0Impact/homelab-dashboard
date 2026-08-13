@@ -1,5 +1,65 @@
+import React, { useState, useEffect } from "react"
+import {
+  LayoutDashboard,
+  Sliders,
+  Layers,
+  Activity,
+  Settings as SettingsIcon,
+  Server,
+  User,
+  Wifi,
+  Laptop,
+  Globe,
+  LogOut,
+  Menu,
+  X,
+  ChevronRight,
+} from "lucide-react"
+
 export function Sidebar({ user, current, onNavigate, onLogout }) {
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  // Network connection indicator state
+  const [networkState, setNetworkState] = useState({
+    label: "Local System",
+    statusText: "localhost",
+    isTailscale: false,
+    isLocal: true,
+  })
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hostname = window.location.hostname
+
+      const isTailscaleIP = /^100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\./.test(hostname)
+      const isTailscaleDomain = hostname.endsWith(".ts.net")
+      const isTs = isTailscaleIP || isTailscaleDomain
+
+      const isLocal =
+        hostname === "localhost" ||
+        hostname === "127.0.0.1" ||
+        hostname === "::1" ||
+        hostname.endsWith(".local")
+
+      let label = "Private Network"
+      let statusText = "LAN connection · active"
+
+      if (isTs) {
+        label = "Tailscale Mesh"
+        statusText = "Encrypted mesh · active"
+      } else if (isLocal) {
+        label = "Local System"
+        statusText = "Direct host · active"
+      }
+
+      setNetworkState({
+        label,
+        statusText,
+        isTailscale: isTs,
+        isLocal,
+      })
+    }
+  }, [])
 
   const handleSelect = (key) => {
     onNavigate(key)
@@ -8,6 +68,12 @@ export function Sidebar({ user, current, onNavigate, onLogout }) {
 
   const displayName = user?.name || user?.username || "admin"
   const displayEmail = user?.email || `${user?.username || "root"}@homelab`
+
+  const ConnectionIcon = networkState.isTailscale
+    ? Wifi
+    : networkState.isLocal
+    ? Laptop
+    : Globe
 
   return (
     <>
@@ -78,10 +144,10 @@ export function Sidebar({ user, current, onNavigate, onLogout }) {
 
             <div className="space-y-3 pt-4">
               <div className={`flex items-center gap-2.5 rounded-lg p-2.5 ${glass}`}>
-                <Wifi className="h-4 w-4 text-chart-2" />
+                <ConnectionIcon className="h-4 w-4 text-chart-2" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium truncate">Tailscale mesh</p>
-                  <p className="text-[10px] text-muted-foreground">active</p>
+                  <p className="text-xs font-medium truncate">{networkState.label}</p>
+                  <p className="text-[10px] text-muted-foreground">{networkState.statusText}</p>
                 </div>
                 <StatusDot online />
               </div>
@@ -143,10 +209,10 @@ export function Sidebar({ user, current, onNavigate, onLogout }) {
 
         <div className="space-y-3 p-4">
           <div className={`flex items-center gap-2.5 rounded-lg px-3 py-2.5 ${glass}`}>
-            <Wifi className="h-4 w-4 text-chart-2" />
-            <div className="flex-1">
-              <p className="text-xs font-medium">Private Network</p>
-              <p className="text-[11px] text-muted-foreground">Tailscale mesh · active</p>
+            <ConnectionIcon className="h-4 w-4 text-chart-2" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium truncate">{networkState.label}</p>
+              <p className="text-[11px] text-muted-foreground truncate">{networkState.statusText}</p>
             </div>
             <StatusDot online />
           </div>
