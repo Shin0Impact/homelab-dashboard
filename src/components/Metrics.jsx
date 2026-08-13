@@ -16,10 +16,10 @@ import {
 } from "recharts"
 
 const CHART_COLORS = {
-  cpu: "#00d8d6",     // Cyan
-  network: "#10b981",  // Emerald
-  upload: "#f59e0b",   // Amber
-  memory: "#a855f7",   // Purple
+  cpu: "#00d8d6",
+  network: "#10b981",
+  upload: "#f59e0b",
+  memory: "#a855f7",
 }
 
 const PIE_COLORS = ["#a855f7", "#22c55e", "#3b82f6", "#f59e0b", "#ec4899"]
@@ -56,59 +56,69 @@ export function Metrics() {
   const [cpuHistory, setCpuHistory] = useState([])
   const [netHistory, setNetHistory] = useState([])
   const [ramData, setRamData] = useState([
-    { name: "Used RAM", value: 3.2 },
-    { name: "Free RAM", value: 4.5 },
+    { name: "Used RAM", value: 0, fill: "#a855f7" },
+    { name: "Free RAM", value: 0, fill: "#22c55e" },
   ])
-  const [totalRam, setTotalRam] = useState("8")
+  const [totalRam, setTotalRam] = useState("0")
   const [errorMsg, setErrorMsg] = useState(null)
   const [processes, setProcesses] = useState([])
 
   const fetchMetrics = async () => {
     try {
-      let res = await fetch("/api/telemetry")
-      
-      if (!res.ok || !res.headers.get("content-type")?.includes("application/json")) {
-        res = await fetch("/api/metrics")
-      }
-
-      const contentType = res.headers.get("content-type")
-      if (!res.ok || !contentType || !contentType.includes("application/json")) {
-        throw new Error("Invalid API response format (HTML returned)")
-      }
+      const res = await fetch("/api/telemetry")
+      if (!res.ok) throw new Error("Telemetry request failed")
 
       const data = await res.json()
       if (!data || data.error) return
 
       setErrorMsg(null)
-      const timeStr = data.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      const timeStr =
+        data.timestamp ||
+        new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })
 
+      // 1. CPU History
       if (data.cpuLoad !== undefined) {
-        setCpuHistory((prev) => [...prev, { t: timeStr, cpu: data.cpuLoad }].slice(-20))
+        setCpuHistory((prev) =>
+          [...prev, { t: timeStr, cpu: data.cpuLoad }].slice(-20)
+        )
       }
 
+      // 2. Network History
       if (data.net) {
-        setNetHistory((prev) => [...prev, { t: timeStr, down: data.net.down || 0, up: data.net.up || 0 }].slice(-20))
+        setNetHistory((prev) =>
+          [
+            ...prev,
+            { t: timeStr, down: data.net.down || 0, up: data.net.up || 0 },
+          ].slice(-20)
+        )
       }
 
+      // 3. Memory Allocation (Creates new array references for Recharts rerender)
       if (data.ram) {
-        setRamData(data.ram)
+        setRamData([...data.ram])
         if (data.totalMemGB) setTotalRam(data.totalMemGB)
       }
 
-      if (data.processes) {
-        // Keep sorted by CPU usage descending
-        const sorted = [...data.processes].sort((a, b) => (b.cpu || 0) - (a.cpu || 0))
-        setProcesses(sorted)
+      // 4. Container Processes (Force strict client-side CPU descending sort)
+      if (Array.isArray(data.processes)) {
+        const sortedProcesses = [...data.processes].sort(
+          (a, b) => (parseFloat(b.cpu) || 0) - (parseFloat(a.cpu) || 0)
+        )
+        setProcesses(sortedProcesses)
       }
     } catch (err) {
-      console.warn("Live telemetry issue:", err.message)
-      setErrorMsg("Telemetry endpoint unreachable. Showing local buffer.")
+      console.warn("Telemetry fetch error:", err.message)
+      setErrorMsg("Telemetry endpoint unreachable.")
     }
   }
 
   useEffect(() => {
     fetchMetrics()
-    const interval = setInterval(fetchMetrics, 3000)
+    const interval = setInterval(fetchMetrics, 2000)
     return () => clearInterval(interval)
   }, [])
 
@@ -119,24 +129,14 @@ export function Metrics() {
 
     try {
       await fetch(`/api/containers/${id}/${action}`, { method: "POST" })
-    } catch {
-      // Fallback
+      fetchMetrics()
+    } catch (e) {
+      console.error(e)
     }
-
-    setProcesses((prev) =>
-      prev.map((p) => {
-        if (p.id === id) {
-          const isRunning = p.status === "running"
-          return {
-            ...p,
-            status: isRunning ? "stopped" : "running",
-            cpu: isRunning ? 0 : 1.5,
-          }
-        }
-        return p
-      })
-    )
   }
+
+  // Key to force Pie chart re-render when RAM values change
+  const ramKey = ramData.map((d) => d.value).join("-")
 
   return (
     <div className="w-full space-y-6 p-4 sm:p-6 md:p-8">
@@ -169,7 +169,7 @@ export function Metrics() {
         <ChartCard title="Memory Allocation" subtitle={`${totalRam} GB total · Memory breakdown`} icon={MemoryStick}>
           <div className="flex h-[220px] w-full items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
+              <PieChart key={ramKey}>
                 <Pie
                   data={ramData}
                   cx="50%"
@@ -178,12 +178,13 @@ export function Metrics() {
                   outerRadius={80}
                   paddingAngle={4}
                   dataKey="value"
+                  isAnimationActive={false}
                 >
                   {ramData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={entry.fill || PIE_COLORS[index % PIE_COLORS.length]} 
-                      stroke="rgba(0,0,0,0.4)" 
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={entry.fill || PIE_COLORS[index % PIE_COLORS.length]}
+                      stroke="rgba(0,0,0,0.4)"
                     />
                   ))}
                 </Pie>
@@ -233,8 +234,7 @@ export function Metrics() {
           </button>
         </div>
 
-        {/* Desktop Task Table */}
-        <div className={`hidden overflow-hidden rounded-2xl md:block ${glass}`}>
+        <div className={`overflow-hidden rounded-2xl ${glass}`}>
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-white/5 text-xs uppercase tracking-wide text-muted-foreground">
@@ -256,7 +256,7 @@ export function Metrics() {
                     </div>
                   </td>
                   <td className="px-5 py-3 font-mono text-xs text-muted-foreground">{p.pid}</td>
-                  <td className="px-5 py-3 font-mono text-xs text-cyan-400">{p.cpu ?? 0}%</td>
+                  <td className="px-5 py-3 font-mono text-xs text-cyan-400 font-semibold">{p.cpu ?? 0}%</td>
                   <td className="px-5 py-3 font-mono text-xs text-purple-400">{p.mem ?? "0 MB"}</td>
                   <td className="px-5 py-3">
                     <span
