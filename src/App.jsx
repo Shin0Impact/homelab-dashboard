@@ -135,7 +135,10 @@ export default function App() {
     }
   }
 
-  const handleLogin = (token) => {
+  const handleLogin = (data) => {
+    // Extract the token string safely if 'data' is the full response object
+    const token = typeof data === "object" ? data.token : data
+
     if (token) localStorage.setItem("homelab_token", token)
     localStorage.setItem("homelab_authed", "true")
     setAuthed(true)
