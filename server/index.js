@@ -146,6 +146,9 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
         ? container.Names[0].replace("/", "")
         : "unnamed";
 
+      const cleanName = rawName.toLowerCase();
+      const meta = inferCategoryAndIcon(rawName, container.Image || "");
+
       // Extract real Docker Compose project name, or default to "standalone"
       const stackName =
         container.Labels?.["com.docker.compose.project"] || "standalone";
@@ -198,8 +201,8 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
         id: container.Id,
         containerName: rawName,
         name: custom.name || rawName,
-        stack: stackName, // <--- Send stack name directly to frontend
-        labels: container.Labels || {}, // <--- Include raw labels
+        stack: stackName,
+        labels: container.Labels || {},
         status: container.State === "running" ? "online" : "offline",
         online: container.State === "running",
         state: container.State,
@@ -219,6 +222,7 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
       onlineCount: services.filter((s) => s.online).length,
     });
   } catch (err) {
+    console.error("Error fetching containers:", err);
     res
       .status(500)
       .json({ error: "Failed to list containers", details: err.message });
@@ -234,12 +238,12 @@ app.get("/api/telemetry", async (req, res) => {
     try {
       dockerContainers = await docker.listContainers({ all: false });
     } catch (e) {
-      // Fallback
+      // Fallback if socket fails
     }
 
     const processList = dockerContainers
       .map((c) => {
-        const cleanName = c.Names[0].replace("/", "");
+        const cleanName = c.Names[0] ? c.Names[0].replace("/", "") : "unnamed";
         return {
           id: c.Id,
           name: cleanName,
