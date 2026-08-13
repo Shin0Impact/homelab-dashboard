@@ -8,5 +8,7 @@ services:
     volumes:
       # Mount host Docker socket read-only to monitor running containers
       - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock
+      - /usr/bin/tailscale:/usr/bin/tailscale:ro
     environment:
       - NODE_ENV=production
