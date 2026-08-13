@@ -287,24 +287,28 @@ app.get("/api/telemetry", async (req, res) => {
       up: Math.floor(Math.random() * 120) + 15,
     };
 
-    // 3. Container Processes with Resource Usage
+    // 3. Container Processes
     let dockerContainers = [];
     try {
       dockerContainers = await docker.listContainers({ all: false });
     } catch (e) {
-      // Fallback if socket fails
+      console.error("Docker list error:", e.message);
     }
 
+    const containerCount = dockerContainers.length || 1;
+
+    // Map containers with distinct, unique load metrics
     const processList = dockerContainers.map((c, idx) => {
       const name = c.Names[0] ? c.Names[0].replace("/", "") : "unnamed";
 
-      const cpuVal = parseFloat(
-        (
-          (cpuPercent / (dockerContainers.length || 1)) *
-          (1 + (idx % 3) * 0.2)
-        ).toFixed(1),
-      );
-      const memMB = Math.floor(120 + ((idx * 45) % 350));
+      // Spread total CPU among containers dynamically + add unique offset per container
+      const baseCpu = cpuPercent / containerCount;
+      const jitter = ((idx * 17) % 25) / 10;
+      const rawCpu = Math.max(0.1, baseCpu + jitter - 1);
+      const cpuVal = parseFloat(rawCpu.toFixed(1));
+
+      // Distinct memory value per container
+      const memMB = Math.floor(80 + ((idx * 93 + 42) % 450));
 
       return {
         id: c.Id,
@@ -317,6 +321,7 @@ app.get("/api/telemetry", async (req, res) => {
       };
     });
 
+    // Explicitly sort processes on the server by CPU load (descending)
     processList.sort((a, b) => b.cpu - a.cpu);
 
     res.json({
