@@ -1,5 +1,5 @@
-import React, { useState } from "react"
-import { ChevronRight, Lock, Server, User, Wifi } from "lucide-react"
+import React, { useState, useEffect } from "react"
+import { ChevronRight, Lock, Server, User, Wifi, Globe, Laptop } from "lucide-react"
 
 const glass =
   "border border-white/5 bg-card/60 backdrop-blur-xl shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset]"
@@ -10,6 +10,44 @@ export function Login({ onSignIn }) {
   const [remember, setRemember] = useState(true)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+
+  // Network connection indicator state
+  const [connectionInfo, setConnectionInfo] = useState({
+    label: "Local",
+    address: "localhost",
+    isTailscale: false,
+    isLocal: true,
+  })
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hostname = window.location.hostname
+      const host = window.location.host // Includes port (e.g., 100.79.154.76:3333)
+
+      // Detect Tailscale IP range (100.64.0.0/10) or MagicDNS domain (*.ts.net)
+      const isTailscaleIP = /^100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\./.test(hostname)
+      const isTailscaleDomain = hostname.endsWith(".ts.net")
+      const isTs = isTailscaleIP || isTailscaleDomain
+
+      const isLocal =
+        hostname === "localhost" ||
+        hostname === "127.0.0.1" ||
+        hostname === "::1" ||
+        hostname.endsWith(".local")
+
+      let label = "Network"
+      if (isTs) label = "Tailscale Mesh"
+      else if (isLocal) label = "Local System"
+      else label = "Direct LAN"
+
+      setConnectionInfo({
+        label,
+        address: host,
+        isTailscale: isTs,
+        isLocal,
+      })
+    }
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -112,8 +150,16 @@ export function Login({ onSignIn }) {
         </form>
 
         <div className="mt-6 flex items-center justify-center gap-2 rounded-lg border border-white/5 bg-card/40 py-2 text-xs text-muted-foreground">
-          <Wifi className="h-3.5 w-3.5 text-chart-2" />
-          Connected via Tailscale · 100.64.0.1
+          {connectionInfo.isTailscale ? (
+            <Wifi className="h-3.5 w-3.5 text-chart-2" />
+          ) : connectionInfo.isLocal ? (
+            <Laptop className="h-3.5 w-3.5 text-primary" />
+          ) : (
+            <Globe className="h-3.5 w-3.5 text-chart-1" />
+          )}
+          <span>
+            Connected via {connectionInfo.label} · <span className="font-mono">{connectionInfo.address}</span>
+          </span>
         </div>
       </div>
     </div>
