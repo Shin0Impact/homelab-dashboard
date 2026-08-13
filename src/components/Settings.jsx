@@ -35,21 +35,21 @@ export function Settings() {
   const [amoled, setAmoled] = useState(() => localStorage.getItem("homelab_amoled") === "true")
   const [refresh, setRefresh] = useState(() => Number(localStorage.getItem("homelab_refresh")) || 10)
 
-  // Save changes & apply settings dynamically
+  // Save changes & apply settings dynamically across the dashboard
   useEffect(() => {
     localStorage.setItem("homelab_categories", JSON.stringify(categories))
     localStorage.setItem("homelab_compact", compact)
     localStorage.setItem("homelab_amoled", amoled)
     localStorage.setItem("homelab_refresh", refresh)
 
-    // 1. Toggle AMOLED background globally
+    // 1. Toggle AMOLED background globally on document element
     if (amoled) {
       document.documentElement.classList.add("amoled")
     } else {
       document.documentElement.classList.remove("amoled")
     }
 
-    // 2. Broadcast updates across the app (for Compact Mode, Categories, and Polling)
+    // 2. Broadcast custom event across active components
     window.dispatchEvent(new Event("homelab_settings_updated"))
     window.dispatchEvent(new Event("homelab_categories_updated"))
   }, [categories, compact, amoled, refresh])
@@ -169,7 +169,7 @@ export function Settings() {
               step={5}
               value={refresh}
               onChange={(e) => setRefresh(Number(e.target.value))}
-              className="mt-3 w-full accent-[var(--primary)]"
+              className="mt-3 w-full accent-[var(--primary)] cursor-pointer"
             />
           </div>
         </div>

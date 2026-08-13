@@ -45,8 +45,12 @@ body {
     sans-serif;
 }
 
+/* AMOLED Dark Mode Override for Tailwind v4 */
 html.amoled,
-html.amoled body {
+html.amoled body,
+html.amoled #root {
   background-color: #000000 !important;
-  --background: #000000;
+  --color-background: #000000 !important;
+  --color-card: oklch(0.08 0 0) !important;
+  --color-sidebar: #000000 !important;
 }

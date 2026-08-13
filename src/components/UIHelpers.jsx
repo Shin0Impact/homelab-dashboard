@@ -81,7 +81,7 @@ export function CategoryTag({ category }) {
   );
 }
 
-// --- Custom Hooks for Appearance Settings ---
+// --- Custom Appearance & Polling Hooks ---
 
 export function useCompactMode() {
   const [isCompact, setIsCompact] = useState(() => {
