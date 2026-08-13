@@ -66,11 +66,26 @@ export function Settings() {
 
   const token = localStorage.getItem("homelab_token")
 
+  const handleAuthError = () => {
+    setUserError("Session expired. Please sign out and log back in.")
+    // Optional: force logout if token is invalid
+    // localStorage.removeItem("homelab_authed")
+    // localStorage.removeItem("homelab_token")
+    // window.location.reload()
+  }
+
   // Load server settings on mount
   useEffect(() => {
     async function loadBackendSettings() {
+      if (!token) return
       try {
-        const res = await fetch("/api/settings")
+        const res = await fetch("/api/settings", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (res.status === 401 || res.status === 403) {
+          handleAuthError()
+          return
+        }
         if (res.ok) {
           const data = await res.json()
           dispatch(setSettings(data))
@@ -80,7 +95,7 @@ export function Settings() {
       }
     }
     loadBackendSettings()
-  }, [dispatch])
+  }, [dispatch, token])
 
   // Sync settings state changes to backend API
   useEffect(() => {
@@ -98,14 +113,22 @@ export function Settings() {
 
   // Fetch Users List
   const fetchUsers = async () => {
-    if (!token) return
+    if (!token) {
+      setUserError("No authentication token found. Please sign in again.")
+      return
+    }
     try {
       const res = await fetch("/api/users", {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (res.status === 401 || res.status === 403) {
+        handleAuthError()
+        return
+      }
       if (res.ok) {
         const data = await res.json()
         setUsers(data)
+        setUserError("")
       }
     } catch (err) {
       console.error("Failed to fetch users", err)
@@ -114,7 +137,7 @@ export function Settings() {
 
   useEffect(() => {
     fetchUsers()
-  }, [])
+  }, [token])
 
   // User Action Handlers
   const handleAddUser = async (e) => {
@@ -132,6 +155,9 @@ export function Settings() {
       })
 
       const data = await res.json()
+      if (res.status === 401 || res.status === 403) {
+        throw new Error("Invalid or expired token. Please sign out and sign in again.")
+      }
       if (!res.ok) throw new Error(data.message || "Failed to create user")
 
       setNewUser("")
@@ -312,8 +338,8 @@ export function Settings() {
           Manage user accounts, roles, and security credentials.
         </p>
 
-        {userError && <p className="mt-2 text-xs text-destructive">{userError}</p>}
-        {userSuccess && <p className="mt-2 text-xs text-emerald-400">{userSuccess}</p>}
+        {userError && <p className="mt-2 text-xs font-medium text-destructive">{userError}</p>}
+        {userSuccess && <p className="mt-2 text-xs font-medium text-emerald-400">{userSuccess}</p>}
 
         <form onSubmit={handleAddUser} className="mt-4 flex flex-wrap gap-2">
           <input
