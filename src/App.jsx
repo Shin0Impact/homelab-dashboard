@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from "react"
 import { Dashboard } from "./components/Dashboard"
 import { Login } from "./components/Login"
 import { Manage } from "./components/Manage"
-import { ContainerManagement } from "./components/ContainerManagement"
+import { Stacks } from "./components/Stacks"
 import { Metrics } from "./components/Metrics"
 import { Sidebar, Topbar } from "./components/Navigation"
 import { Settings } from "./components/Settings"
@@ -10,7 +10,7 @@ import { Settings } from "./components/Settings"
 const PAGE_META = {
   dashboard: { title: "Dashboard", subtitle: "Live Container Monitor" },
   manage: { title: "Manage Services", subtitle: "Configure & Register Endpoints" },
-  "manage-containers": { title: "Container Control", subtitle: "Start, Stop & Restart Runtime Instances" },
+  stacks: { title: "Docker Stacks", subtitle: "Manage Portainer-Style Stacks & Compose Files" },
   metrics: { title: "System Telemetry", subtitle: "Host Resource Utilization" },
   settings: { title: "Settings", subtitle: "Preferences & System Configuration" },
 }
@@ -127,8 +127,8 @@ export default function App() {
               onDelete={handleDeleteService}
             />
           )}
-          {page === "manage-containers" && (
-            <ContainerManagement
+          {page === "stacks" && (
+            <Stacks
               services={services}
               onRefresh={fetchContainers}
             />
