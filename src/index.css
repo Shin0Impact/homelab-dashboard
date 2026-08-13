@@ -62,18 +62,25 @@ html.light #root {
   background-color: oklch(0.97 0 0) !important;
   --color-background: oklch(0.97 0 0) !important;
   --color-foreground: oklch(0.15 0.01 260) !important;
+
   --color-card: oklch(1 0 0) !important;
   --color-card-foreground: oklch(0.15 0.01 260) !important;
+
+  --color-popover: oklch(1 0 0) !important;
+  --color-popover-foreground: oklch(0.15 0.01 260) !important;
+
   --color-sidebar: oklch(0.94 0 0) !important;
-  --color-primary: oklch(
-    0.48 0.18 245
-  ) !important; /* Deep Royal / Sapphire Blue */
-  --color-primary-foreground: oklch(
-    0.99 0 0
-  ) !important; /* White text on primary */
-  --color-secondary: oklch(0.92 0 0) !important;
+
+  /* Primary Accent for Light Mode */
+  --color-primary: oklch(0.48 0.18 245) !important;
+  --color-primary-foreground: oklch(0.99 0 0) !important;
+
+  --color-secondary: oklch(0.93 0 0) !important;
   --color-secondary-foreground: oklch(0.15 0.01 260) !important;
-  --color-muted-foreground: oklch(0.45 0.01 260) !important;
+
+  --color-muted: oklch(0.93 0 0) !important;
+  --color-muted-foreground: oklch(0.4 0.01 260) !important;
+
   --color-border: oklch(0.88 0 0) !important;
-  --color-input: oklch(0.92 0 0) !important;
+  --color-input: oklch(0.93 0 0) !important;
 }
