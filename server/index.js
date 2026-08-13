@@ -250,7 +250,6 @@ function getCpuUsage() {
 let startCpu = getCpuUsage();
 let currentCpuPercent = 0;
 
-// Poll CPU delta in global scope every 2 seconds
 setInterval(() => {
   const endCpu = getCpuUsage();
   const idleDiff = endCpu.idle - startCpu.idle;
@@ -269,7 +268,7 @@ app.get("/api/telemetry", async (req, res) => {
   try {
     const cpuPercent = currentCpuPercent;
 
-    // 1. Real System RAM
+    // 1. Host Memory
     const totalMemBytes = os.totalmem();
     const freeMemBytes = os.freemem();
     const totalMemGB = parseFloat((totalMemBytes / 1024 ** 3).toFixed(1));
@@ -281,13 +280,7 @@ app.get("/api/telemetry", async (req, res) => {
       { name: "Free RAM", value: freeMemGB, fill: "#22c55e" },
     ];
 
-    // 2. Network Throughput
-    const netStats = {
-      down: Math.floor(Math.random() * 400) + 50,
-      up: Math.floor(Math.random() * 120) + 15,
-    };
-
-    // 3. Container Processes
+    // 2. Fetch Running Containers
     let dockerContainers = [];
     try {
       dockerContainers = await docker.listContainers({ all: false });
@@ -295,34 +288,60 @@ app.get("/api/telemetry", async (req, res) => {
       console.error("Docker list error:", e.message);
     }
 
-    const containerCount = dockerContainers.length || 1;
+    // 3. Fetch Real Container Stats
+    const processList = await Promise.all(
+      dockerContainers.map(async (c) => {
+        const name = c.Names[0] ? c.Names[0].replace("/", "") : "unnamed";
+        let containerCpu = 0;
+        let memUsageMB = 0;
 
-    // Map containers with distinct, unique load metrics
-    const processList = dockerContainers.map((c, idx) => {
-      const name = c.Names[0] ? c.Names[0].replace("/", "") : "unnamed";
+        try {
+          const container = docker.getContainer(c.Id);
+          const stats = await container.stats({ stream: false });
 
-      // Spread total CPU among containers dynamically + add unique offset per container
-      const baseCpu = cpuPercent / containerCount;
-      const jitter = ((idx * 17) % 25) / 10;
-      const rawCpu = Math.max(0.1, baseCpu + jitter - 1);
-      const cpuVal = parseFloat(rawCpu.toFixed(1));
+          const cpuDelta =
+            stats.cpu_stats.cpu_usage.total_usage -
+            stats.precpu_stats.cpu_usage.total_usage;
+          const systemDelta =
+            stats.cpu_stats.system_cpu_usage -
+            stats.precpu_stats.system_cpu_usage;
+          const numCpus =
+            stats.cpu_stats.online_cpus ||
+            stats.cpu_stats.cpu_usage.percpu_usage?.length ||
+            1;
 
-      // Distinct memory value per container
-      const memMB = Math.floor(80 + ((idx * 93 + 42) % 450));
+          if (systemDelta > 0 && cpuDelta > 0) {
+            containerCpu = parseFloat(
+              ((cpuDelta / systemDelta) * numCpus * 100).toFixed(1),
+            );
+          }
 
-      return {
-        id: c.Id,
-        name,
-        pid: c.Id.substring(0, 8),
-        cpu: cpuVal,
-        mem: `${memMB} MB`,
-        memValue: memMB,
-        status: c.State === "running" ? "running" : "stopped",
-      };
+          const memBytes = stats.memory_stats.usage || 0;
+          memUsageMB = Math.round(memBytes / (1024 * 1024));
+        } catch (err) {
+          containerCpu = 0;
+          memUsageMB = 0;
+        }
+
+        return {
+          id: c.Id,
+          name,
+          pid: c.Id.substring(0, 8),
+          cpu: containerCpu,
+          mem: `${memUsageMB} MB`,
+          memValue: memUsageMB,
+          status: c.State === "running" ? "running" : "stopped",
+        };
+      }),
+    );
+
+    // Multi-level Server Sorting: CPU first, Memory (MB) second
+    processList.sort((a, b) => {
+      if (b.cpu !== a.cpu) {
+        return b.cpu - a.cpu;
+      }
+      return b.memValue - a.memValue;
     });
-
-    // Explicitly sort processes on the server by CPU load (descending)
-    processList.sort((a, b) => b.cpu - a.cpu);
 
     res.json({
       timestamp: new Date().toLocaleTimeString([], {
@@ -332,10 +351,13 @@ app.get("/api/telemetry", async (req, res) => {
       }),
       cpuLoad: cpuPercent,
       ram: ramBreakdown,
-      net: netStats,
-      totalMemGB: totalMemGB,
-      usedMemGB: usedMemGB,
-      freeMemGB: freeMemGB,
+      net: {
+        down: Math.floor(Math.random() * 400) + 50,
+        up: Math.floor(Math.random() * 120) + 15,
+      },
+      totalMemGB,
+      usedMemGB,
+      freeMemGB,
       processes: processList,
     });
   } catch (err) {
@@ -363,7 +385,7 @@ app.post("/api/containers/:id/:action", async (req, res) => {
   }
 });
 
-// Resilient PUT endpoint matching by container ID or container name
+// Service update endpoint
 app.put("/api/services/:id", async (req, res) => {
   try {
     let custom = getCustomServices();
@@ -377,9 +399,7 @@ app.put("/api/services/:id", async (req, res) => {
         if (match && match.Names[0]) {
           containerName = match.Names[0].replace("/", "");
         }
-      } catch (e) {
-        // Fallback if Docker inspect isn't accessible
-      }
+      } catch (e) {}
     }
 
     const existingIndex = custom.findIndex(
@@ -387,11 +407,7 @@ app.put("/api/services/:id", async (req, res) => {
         s.id === id || (containerName && s.containerName === containerName),
     );
 
-    const updatedData = {
-      id,
-      containerName,
-      ...req.body,
-    };
+    const updatedData = { id, containerName, ...req.body };
 
     if (existingIndex > -1) {
       custom[existingIndex] = { ...custom[existingIndex], ...updatedData };

@@ -1,5 +1,15 @@
-import React, { useEffect, useState } from "react"
-import { Cpu, MemoryStick, Network, Play, RefreshCw, Square, Terminal } from "lucide-react"
+import React, { useEffect, useMemo, useState } from "react"
+import {
+  ArrowDown,
+  ArrowUp,
+  Cpu,
+  MemoryStick,
+  Network,
+  Play,
+  RefreshCw,
+  Square,
+  Terminal,
+} from "lucide-react"
 import {
   Area,
   AreaChart,
@@ -62,6 +72,7 @@ export function Metrics() {
   const [totalRam, setTotalRam] = useState("0")
   const [errorMsg, setErrorMsg] = useState(null)
   const [processes, setProcesses] = useState([])
+  const [sortConfig, setSortConfig] = useState({ key: "cpu", direction: "desc" })
 
   const fetchMetrics = async () => {
     try {
@@ -80,14 +91,12 @@ export function Metrics() {
           second: "2-digit",
         })
 
-      // 1. CPU History
       if (data.cpuLoad !== undefined) {
         setCpuHistory((prev) =>
           [...prev, { t: timeStr, cpu: data.cpuLoad }].slice(-20)
         )
       }
 
-      // 2. Network History
       if (data.net) {
         setNetHistory((prev) =>
           [
@@ -97,18 +106,13 @@ export function Metrics() {
         )
       }
 
-      // 3. Memory Allocation (Creates new array references for Recharts rerender)
       if (data.ram) {
         setRamData([...data.ram])
         if (data.totalMemGB) setTotalRam(data.totalMemGB)
       }
 
-      // 4. Container Processes (Force strict client-side CPU descending sort)
       if (Array.isArray(data.processes)) {
-        const sortedProcesses = [...data.processes].sort(
-          (a, b) => (parseFloat(b.cpu) || 0) - (parseFloat(a.cpu) || 0)
-        )
-        setProcesses(sortedProcesses)
+        setProcesses(data.processes)
       }
     } catch (err) {
       console.warn("Telemetry fetch error:", err.message)
@@ -135,8 +139,46 @@ export function Metrics() {
     }
   }
 
-  // Key to force Pie chart re-render when RAM values change
+  const handleSort = (key) => {
+    setSortConfig((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === "desc" ? "asc" : "desc",
+    }))
+  }
+
+  // Client-side dynamic multi-column sorting
+  const sortedProcesses = useMemo(() => {
+    return [...processes].sort((a, b) => {
+      let aVal = a[sortConfig.key]
+      let bVal = b[sortConfig.key]
+
+      if (sortConfig.key === "mem") {
+        aVal = a.memValue
+        bVal = b.memValue
+      }
+
+      if (aVal === bVal) {
+        // Primary tie-breaker: CPU, secondary tie-breaker: Memory
+        if (sortConfig.key !== "cpu") return b.cpu - a.cpu
+        return b.memValue - a.memValue
+      }
+
+      if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1
+      if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1
+      return 0
+    })
+  }, [processes, sortConfig])
+
   const ramKey = ramData.map((d) => d.value).join("-")
+
+  const renderSortIndicator = (key) => {
+    if (sortConfig.key !== key) return null
+    return sortConfig.direction === "desc" ? (
+      <ArrowDown className="inline h-3 w-3 ml-1 text-primary" />
+    ) : (
+      <ArrowUp className="inline h-3 w-3 ml-1 text-primary" />
+    )
+  }
 
   return (
     <div className="w-full space-y-6 p-4 sm:p-6 md:p-8">
@@ -188,10 +230,7 @@ export function Metrics() {
                     />
                   ))}
                 </Pie>
-                <Tooltip
-                  formatter={(val) => [`${val} GB`, "Memory"]}
-                  contentStyle={tooltipStyle}
-                />
+                <Tooltip formatter={(val) => [`${val} GB`, "Memory"]} contentStyle={tooltipStyle} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -237,17 +276,32 @@ export function Metrics() {
         <div className={`overflow-hidden rounded-2xl ${glass}`}>
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-white/5 text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-5 py-3 font-medium">Process / Container</th>
+              <tr className="border-b border-white/5 text-xs uppercase tracking-wide text-muted-foreground select-none">
+                <th
+                  onClick={() => handleSort("name")}
+                  className="px-5 py-3 font-medium cursor-pointer hover:text-foreground"
+                >
+                  Process / Container {renderSortIndicator("name")}
+                </th>
                 <th className="px-5 py-3 font-medium">PID</th>
-                <th className="px-5 py-3 font-medium">CPU Usage</th>
-                <th className="px-5 py-3 font-medium">Memory</th>
+                <th
+                  onClick={() => handleSort("cpu")}
+                  className="px-5 py-3 font-medium cursor-pointer hover:text-foreground"
+                >
+                  CPU Usage {renderSortIndicator("cpu")}
+                </th>
+                <th
+                  onClick={() => handleSort("mem")}
+                  className="px-5 py-3 font-medium cursor-pointer hover:text-foreground"
+                >
+                  Memory {renderSortIndicator("mem")}
+                </th>
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 text-right font-medium">Action</th>
               </tr>
             </thead>
             <tbody>
-              {processes.map((p) => (
+              {sortedProcesses.map((p) => (
                 <tr key={p.id} className="border-b border-white/5 last:border-0 hover:bg-secondary/30">
                   <td className="px-5 py-3 font-medium">
                     <div className="flex items-center gap-2">
