@@ -150,11 +150,9 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
       const cleanName = rawName.toLowerCase();
       const meta = inferCategoryAndIcon(rawName, container.Image || "");
 
-      // Extract real Docker Compose project name, or default to "standalone"
       const stackName =
         container.Labels?.["com.docker.compose.project"] || "standalone";
 
-      // Match by container ID OR raw container name so updates persist
       const custom =
         customOverrides.find(
           (c) => c.id === container.Id || c.containerName === rawName,
@@ -230,7 +228,7 @@ app.get(["/api/containers", "/api/services"], async (req, res) => {
   }
 });
 
-// CPU Delta Helper for Accurate Core Calculation
+// --- GLOBAL SYSTEM TELEMETRY POLLER ---
 function getCpuUsage() {
   const cpus = os.cpus();
   let user = 0,
@@ -250,29 +248,28 @@ function getCpuUsage() {
 }
 
 let startCpu = getCpuUsage();
+let currentCpuPercent = 0;
+
+// Poll CPU delta in global scope every 2 seconds
+setInterval(() => {
+  const endCpu = getCpuUsage();
+  const idleDiff = endCpu.idle - startCpu.idle;
+  const totalDiff = endCpu.total - startCpu.total;
+  startCpu = endCpu;
+  currentCpuPercent = Math.max(
+    0,
+    Math.min(100, Math.round((1 - idleDiff / (totalDiff || 1)) * 100)),
+  );
+}, 2000);
 
 // Telemetry & System Metrics Endpoint
 app.get("/api/telemetry", async (req, res) => {
   res.setHeader("Content-Type", "application/json");
-  const cpuPercent = currentCpuPercent;
 
   try {
-    // 1. Precise CPU Usage %
-    // System Metrics Poller (Global State)
-    let currentCpuPercent = 0;
+    const cpuPercent = currentCpuPercent;
 
-    setInterval(() => {
-      const endCpu = getCpuUsage();
-      const idleDiff = endCpu.idle - startCpu.idle;
-      const totalDiff = endCpu.total - startCpu.total;
-      startCpu = endCpu;
-      currentCpuPercent = Math.max(
-        0,
-        Math.min(100, Math.round((1 - idleDiff / (totalDiff || 1)) * 100)),
-      );
-    }, 2000);
-
-    // 2. Real System RAM
+    // 1. Real System RAM
     const totalMemBytes = os.totalmem();
     const freeMemBytes = os.freemem();
     const totalMemGB = parseFloat((totalMemBytes / 1024 ** 3).toFixed(1));
@@ -284,13 +281,13 @@ app.get("/api/telemetry", async (req, res) => {
       { name: "Free RAM", value: freeMemGB, fill: "#22c55e" },
     ];
 
-    // 3. Network Throughput
+    // 2. Network Throughput
     const netStats = {
       down: Math.floor(Math.random() * 400) + 50,
       up: Math.floor(Math.random() * 120) + 15,
     };
 
-    // 4. Container Processes with Real/Estimated Resource Usage
+    // 3. Container Processes with Resource Usage
     let dockerContainers = [];
     try {
       dockerContainers = await docker.listContainers({ all: false });
@@ -301,7 +298,6 @@ app.get("/api/telemetry", async (req, res) => {
     const processList = dockerContainers.map((c, idx) => {
       const name = c.Names[0] ? c.Names[0].replace("/", "") : "unnamed";
 
-      // Calculate realistic container CPU % and Mem usage
       const cpuVal = parseFloat(
         (
           (cpuPercent / (dockerContainers.length || 1)) *
@@ -321,7 +317,6 @@ app.get("/api/telemetry", async (req, res) => {
       };
     });
 
-    // Sort processes by highest CPU usage first
     processList.sort((a, b) => b.cpu - a.cpu);
 
     res.json({
@@ -369,7 +364,6 @@ app.put("/api/services/:id", async (req, res) => {
     let custom = getCustomServices();
     const { id } = req.params;
 
-    // Retrieve container details from Docker to grab its container name
     let containerName = req.body.containerName || "";
     if (!containerName) {
       try {
