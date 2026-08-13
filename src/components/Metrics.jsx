@@ -3,6 +3,7 @@ import { Cpu, MemoryStick, Network, Play, RefreshCw, Square, Terminal } from "lu
 import {
   Area,
   AreaChart,
+  CartesianGrid,
   Cell,
   Line,
   LineChart,
@@ -20,6 +21,8 @@ const CHART_COLORS = {
   upload: "#f59e0b",   // Amber
   memory: "#a855f7",   // Purple
 }
+
+const PIE_COLORS = ["#a855f7", "#22c55e", "#3b82f6", "#f59e0b", "#ec4899"]
 
 const glass =
   "border border-white/5 bg-card/60 backdrop-blur-xl shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset]"
@@ -55,21 +58,13 @@ export function Metrics() {
   const [cpuHistory, setCpuHistory] = useState([])
   const [netHistory, setNetHistory] = useState([])
   const [ramData, setRamData] = useState([
-    { name: "System", value: 4.2 },
-    { name: "Containers", value: 6.8 },
-    { name: "Cache", value: 1.5 },
-    { name: "Free", value: 3.5 },
+    { name: "Used RAM", value: 4.2 },
+    { name: "Free RAM", value: 11.8 },
   ])
   const [totalRam, setTotalRam] = useState("16")
   const [errorMsg, setErrorMsg] = useState(null)
 
-  const [processes, setProcesses] = useState([
-    { id: "1", name: "homelab-dashboard", pid: 1021, cpu: 1.2, mem: "140 MB", status: "running" },
-    { id: "2", name: "searxng", pid: 1482, cpu: 0.5, mem: "85 MB", status: "running" },
-    { id: "3", name: "immich_server", pid: 2104, cpu: 4.8, mem: "410 MB", status: "running" },
-    { id: "4", name: "plex_media", pid: 3091, cpu: 12.1, mem: "1.2 GB", status: "running" },
-    { id: "5", name: "nextcloud", pid: 4120, cpu: 2.3, mem: "320 MB", status: "running" },
-  ])
+  const [processes, setProcesses] = useState([])
 
   const fetchMetrics = async () => {
     try {
@@ -124,10 +119,9 @@ export function Metrics() {
     const action = proc.status === "running" ? "stop" : "start"
 
     try {
-      // Dispatch action to express backend docker route
       await fetch(`/api/containers/${id}/${action}`, { method: "POST" })
     } catch {
-      // Fallback local toggle state
+      // Fallback
     }
 
     setProcesses((prev) =>
@@ -247,8 +241,6 @@ export function Metrics() {
               <tr className="border-b border-white/5 text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="px-5 py-3 font-medium">Process / Container</th>
                 <th className="px-5 py-3 font-medium">PID</th>
-                <th className="px-5 py-3 font-medium">CPU Usage</th>
-                <th className="px-5 py-3 font-medium">Memory</th>
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 text-right font-medium">Action</th>
               </tr>
@@ -263,8 +255,6 @@ export function Metrics() {
                     </div>
                   </td>
                   <td className="px-5 py-3 font-mono text-xs text-muted-foreground">{p.pid}</td>
-                  <td className="px-5 py-3 font-mono text-xs">{p.cpu}%</td>
-                  <td className="px-5 py-3 font-mono text-xs">{p.mem}</td>
                   <td className="px-5 py-3">
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
@@ -312,17 +302,6 @@ export function Metrics() {
                   <span className="text-sm font-semibold">{p.name}</span>
                 </div>
                 <span className="font-mono text-[11px] text-muted-foreground">PID: {p.pid}</span>
-              </div>
-
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded-lg bg-secondary/30 p-2">
-                  <span className="text-[10px] text-muted-foreground">CPU</span>
-                  <p className="font-mono font-medium">{p.cpu}%</p>
-                </div>
-                <div className="rounded-lg bg-secondary/30 p-2">
-                  <span className="text-[10px] text-muted-foreground">Memory</span>
-                  <p className="font-mono font-medium">{p.mem}</p>
-                </div>
               </div>
 
               <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-2.5">
