@@ -2,8 +2,22 @@ import React, { useState } from "react"
 import { Activity, Boxes, HardDrive, Wifi, Camera, Download, Home, Image, Music, Video } from "lucide-react"
 import { glass } from "../UIHelpers"
 
+const SERVICE_ICONS = {
+  frigate: { icon: Camera, color: "text-cyan-400" },
+  qbittorrent: { icon: Download, color: "text-blue-400" },
+  homeassistant: { icon: Home, color: "text-amber-400" },
+  immich: { icon: Image, color: "text-purple-400" },
+  lidarr: { icon: Music, color: "text-emerald-400" },
+  ytdl: { icon: Video, color: "text-red-400" }
+}
+
 export function StatCards({ isCompact, totalContainers, onlineCount, offlineCount, storage, tailscale, servicesTelemetry }) {
   const [isHoveredStorage, setIsHoveredStorage] = useState(false)
+
+  // Filter only active online services
+  const activeServices = servicesTelemetry 
+    ? Object.entries(servicesTelemetry).filter(([_, data]) => data && data.status === "online")
+    : []
 
   return (
     <div className="space-y-3">
@@ -117,74 +131,27 @@ export function StatCards({ isCompact, totalContainers, onlineCount, offlineCoun
         </div>
       </div>
 
-      {/* Service Telemetry Mini-Row */}
-      {servicesTelemetry && (
+      {/* Dynamic Service Telemetry Mini-Row (Only Renders Online Services) */}
+      {activeServices.length > 0 && (
         <div className="grid grid-cols-2 min-[480px]:grid-cols-3 lg:grid-cols-6 gap-2">
-          {/* Frigate */}
-          <div className={`flex items-center gap-2.5 rounded-xl p-2.5 ${glass}`}>
-            <Camera className={`h-4 w-4 shrink-0 ${servicesTelemetry.frigate?.online ? "text-cyan-400" : "text-muted-foreground"}`} />
-            <div className="truncate">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Frigate</p>
-              <p className="text-xs font-semibold truncate">
-                {servicesTelemetry.frigate?.detail || "Offline"}
-              </p>
-            </div>
-          </div>
+          {activeServices.map(([key, data]) => {
+            const serviceConfig = SERVICE_ICONS[key] || { icon: Activity, color: "text-teal-400" };
+            const IconComponent = serviceConfig.icon;
 
-          {/* qBittorrent */}
-          <div className={`flex items-center gap-2.5 rounded-xl p-2.5 ${glass}`}>
-            <Download className={`h-4 w-4 shrink-0 ${servicesTelemetry.qbittorrent?.online ? "text-blue-400" : "text-muted-foreground"}`} />
-            <div className="truncate">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">qBittorrent</p>
-              <p className="text-xs font-semibold truncate">
-                {servicesTelemetry.qbittorrent?.detail || "Offline"}
-              </p>
-            </div>
-          </div>
-
-          {/* Home Assistant */}
-          <div className={`flex items-center gap-2.5 rounded-xl p-2.5 ${glass}`}>
-            <Home className={`h-4 w-4 shrink-0 ${servicesTelemetry.homeassistant?.online ? "text-amber-400" : "text-muted-foreground"}`} />
-            <div className="truncate">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Home Assistant</p>
-              <p className="text-xs font-semibold truncate">
-                {servicesTelemetry.homeassistant?.detail || "Offline"}
-              </p>
-            </div>
-          </div>
-
-          {/* Immich */}
-          <div className={`flex items-center gap-2.5 rounded-xl p-2.5 ${glass}`}>
-            <Image className={`h-4 w-4 shrink-0 ${servicesTelemetry.immich?.online ? "text-purple-400" : "text-muted-foreground"}`} />
-            <div className="truncate">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Immich</p>
-              <p className="text-xs font-semibold truncate">
-                {servicesTelemetry.immich?.detail || "Offline"}
-              </p>
-            </div>
-          </div>
-
-          {/* Lidarr */}
-          <div className={`flex items-center gap-2.5 rounded-xl p-2.5 ${glass}`}>
-            <Music className={`h-4 w-4 shrink-0 ${servicesTelemetry.lidarr?.online ? "text-emerald-400" : "text-muted-foreground"}`} />
-            <div className="truncate">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Lidarr</p>
-              <p className="text-xs font-semibold truncate">
-                {servicesTelemetry.lidarr?.detail || "Offline"}
-              </p>
-            </div>
-          </div>
-
-          {/* YT Downloader */}
-          <div className={`flex items-center gap-2.5 rounded-xl p-2.5 ${glass}`}>
-            <Video className={`h-4 w-4 shrink-0 ${servicesTelemetry.ytdl?.online ? "text-red-400" : "text-muted-foreground"}`} />
-            <div className="truncate">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">YTDL</p>
-              <p className="text-xs font-semibold truncate">
-                {servicesTelemetry.ytdl?.detail || "Offline"}
-              </p>
-            </div>
-          </div>
+            return (
+              <div key={key} className={`flex items-center gap-2.5 rounded-xl p-2.5 ${glass}`}>
+                <IconComponent className={`h-4 w-4 shrink-0 ${serviceConfig.color}`} />
+                <div className="truncate">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
+                    {data.label}
+                  </p>
+                  <p className="text-xs font-semibold truncate" title={data.detail}>
+                    {data.detail}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

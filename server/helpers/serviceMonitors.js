@@ -1,103 +1,84 @@
-const FETCH_TIMEOUT_MS = 3000;
+const FETCH_TIMEOUT_MS = 2500;
 
-/**
- * Attempts fetching an API endpoint across multiple host candidate URLs.
- * Works whether running directly on the host or inside a Docker bridge network.
- */
-async function fetchWithFallback(urls, options = {}) {
-  for (const url of urls) {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    try {
-      const res = await fetch(url, { ...options, signal: controller.signal });
-      clearTimeout(id);
-      if (res.ok) {
-        return await res.json();
-      }
-    } catch {
-      clearTimeout(id);
-    }
+async function safeFetchJson(url, options = {}) {
+  if (!url) return null;
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(id);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    clearTimeout(id);
+    return null;
   }
-  return null;
+}
+
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
 export async function getServicesTelemetry() {
-  const [frigateData, qbitData, haRes, immichData, lidarrData, ytdlData] =
-    await Promise.all([
-      // Frigate API
-      fetchWithFallback([
-        "http://frigate:5000/api/events?limit=1",
-        "http://172.17.0.1:5000/api/events?limit=1",
-        "http://host.docker.internal:5000/api/events?limit=1",
-        "http://127.0.0.1:5000/api/events?limit=1",
-      ]),
+  const [
+    frigateData,
+    qbitData,
+    haStates,
+    immichData,
+    lidarrQueue,
+    ytdlHistory,
+  ] = await Promise.all([
+    // Frigate
+    safeFetchJson(
+      process.env.FRIGATE_URL || "http://frigate:5000/api/events?limit=1",
+    ),
 
-      // qBittorrent Transfer Info
-      fetchWithFallback([
+    // qBittorrent
+    safeFetchJson(
+      process.env.QBITTORRENT_URL ||
         "http://qbittorrent:8080/api/v2/transfer/info",
-        "http://172.17.0.1:8080/api/v2/transfer/info",
-        "http://host.docker.internal:8080/api/v2/transfer/info",
-        "http://127.0.0.1:8080/api/v2/transfer/info",
-      ]),
+    ),
 
-      // Home Assistant
-      fetchWithFallback(
-        [
-          "http://homeassistant:8123/api/",
-          "http://172.17.0.1:8123/api/",
-          "http://host.docker.internal:8123/api/",
-          "http://127.0.0.1:8123/api/",
-        ],
-        {
-          headers: process.env.HA_TOKEN
-            ? { Authorization: `Bearer ${process.env.HA_TOKEN}` }
-            : {},
-        },
-      ),
+    // Home Assistant
+    safeFetchJson(
+      process.env.HA_URL || "http://homeassistant:8123/api/states",
+      {
+        headers: process.env.HA_TOKEN
+          ? { Authorization: `Bearer ${process.env.HA_TOKEN}` }
+          : {},
+      },
+    ),
 
-      // Immich Server Stats
-      fetchWithFallback(
-        [
-          "http://immich-server:2283/api/server-info/stats",
-          "http://172.17.0.1:2283/api/server-info/stats",
-          "http://host.docker.internal:2283/api/server-info/stats",
-          "http://127.0.0.1:2283/api/server-info/stats",
-        ],
-        {
-          headers: process.env.IMMICH_API_KEY
-            ? { "x-api-key": process.env.IMMICH_API_KEY }
-            : {},
-        },
-      ),
+    // Immich
+    safeFetchJson(
+      process.env.IMMICH_URL ||
+        "http://immich-server:2283/api/server-info/stats",
+      {
+        headers: process.env.IMMICH_API_KEY
+          ? { "x-api-key": process.env.IMMICH_API_KEY }
+          : {},
+      },
+    ),
 
-      // Lidarr Queue
-      fetchWithFallback(
-        [
-          "http://lidarr:8686/api/v1/queue",
-          "http://172.17.0.1:8686/api/v1/queue",
-          "http://host.docker.internal:8686/api/v1/queue",
-          "http://127.0.0.1:8686/api/v1/queue",
-        ],
-        {
-          headers: process.env.LIDARR_API_KEY
-            ? { "X-Api-Key": process.env.LIDARR_API_KEY }
-            : {},
-        },
-      ),
+    // Lidarr
+    safeFetchJson(process.env.LIDARR_URL || "http://lidarr:8686/api/v1/queue", {
+      headers: process.env.LIDARR_API_KEY
+        ? { "X-Api-Key": process.env.LIDARR_API_KEY }
+        : {},
+    }),
 
-      // YouTube Downloader / TubeSync / YTDL
-      fetchWithFallback([
-        "http://youtube-dl:8081/api/history",
-        "http://ytdl:8081/api/history",
-        "http://172.17.0.1:8081/api/history",
-        "http://host.docker.internal:8081/api/history",
-        "http://127.0.0.1:8081/api/history",
-      ]),
-    ]);
+    // YTDL / TubeSync
+    safeFetchJson(process.env.YTDL_URL || "http://youtube-dl:8081/api/history"),
+  ]);
 
-  // Format Frigate motion info
-  let frigateDetail = "No Motion";
-  if (frigateData && Array.isArray(frigateData) && frigateData.length > 0) {
+  const telemetry = {};
+
+  // 1. Frigate Telemetry
+  if (Array.isArray(frigateData) && frigateData.length > 0) {
     const event = frigateData[0];
     const timeStr = event.start_time
       ? new Date(event.start_time * 1000).toLocaleTimeString([], {
@@ -105,66 +86,88 @@ export async function getServicesTelemetry() {
           minute: "2-digit",
         })
       : "";
-    frigateDetail = `${event.label || "Motion"} ${timeStr}`.trim();
+    const camera = event.camera ? ` (${event.camera})` : "";
+
+    telemetry.frigate = {
+      label: "Frigate",
+      detail: `${event.label || "Motion"}${camera} • ${timeStr}`,
+      status: "online",
+    };
   }
 
-  // Format qBittorrent speed
-  let qbitDetail = "Idle";
+  // 2. qBittorrent Telemetry
   if (qbitData) {
-    const speed = (qbitData.dl_info_speed / (1024 * 1024)).toFixed(1);
-    qbitDetail = qbitData.dl_info_speed > 0 ? `${speed} MB/s` : "0 MB/s";
+    const dlSpeed = (qbitData.dl_info_speed / (1024 * 1024)).toFixed(1);
+    const ulSpeed = (qbitData.up_info_speed / (1024 * 1024)).toFixed(1);
+
+    let detail = "Idle";
+    if (qbitData.dl_info_speed > 0 || qbitData.up_info_speed > 0) {
+      detail = `↓ ${dlSpeed} MB/s  ↑ ${ulSpeed} MB/s`;
+    }
+
+    telemetry.qbittorrent = {
+      label: "qBittorrent",
+      detail,
+      status: "online",
+    };
   }
 
-  // Format Immich photos and videos count
-  let immichDetail = "Online";
+  // 3. Home Assistant Telemetry
+  if (Array.isArray(haStates)) {
+    const activeEntities = haStates.filter(
+      (e) => e.state !== "unavailable" && e.state !== "unknown",
+    ).length;
+    telemetry.homeassistant = {
+      label: "Home Assistant",
+      detail: `${activeEntities} Active Entities`,
+      status: "online",
+    };
+  }
+
+  // 4. Immich Telemetry
   if (immichData) {
-    const photos = immichData.photos ?? 0;
-    const videos = immichData.videos ?? 0;
-    immichDetail = `${photos} Photos, ${videos} Videos`;
+    const photos = immichData.photos || 0;
+    const videos = immichData.videos || 0;
+    const usage = formatBytes(immichData.usage || 0);
+
+    telemetry.immich = {
+      label: "Immich",
+      detail: `${photos} Photos, ${videos} Videos (${usage})`,
+      status: "online",
+    };
   }
 
-  // Format Lidarr queue count
-  let lidarrDetail = "Queue Empty";
-  if (lidarrData) {
-    const count = Array.isArray(lidarrData)
-      ? lidarrData.length
-      : lidarrData.totalRecords || 0;
-    lidarrDetail = `${count} items in queue`;
+  // 5. Lidarr Telemetry
+  if (lidarrQueue) {
+    const queueList = Array.isArray(lidarrQueue)
+      ? lidarrQueue
+      : lidarrQueue.records || [];
+    const count = queueList.length;
+    const activeDownloads = queueList.filter(
+      (item) => item.status === "downloading",
+    ).length;
+
+    telemetry.lidarr = {
+      label: "Lidarr",
+      detail:
+        count > 0
+          ? `${count} Queued (${activeDownloads} Active)`
+          : "Queue Empty",
+      status: "online",
+    };
   }
 
-  // Format YTDL downloads
-  let ytdlDetail = "Active";
-  if (ytdlData) {
-    const total = Array.isArray(ytdlData)
-      ? ytdlData.length
-      : ytdlData.total || 0;
-    ytdlDetail = `${total} downloaded`;
+  // 6. YTDL Telemetry
+  if (ytdlHistory) {
+    const historyList = Array.isArray(ytdlHistory)
+      ? ytdlHistory
+      : ytdlHistory.data || [];
+    telemetry.ytdl = {
+      label: "YTDL",
+      detail: `${historyList.length} Downloaded Items`,
+      status: "online",
+    };
   }
 
-  return {
-    frigate: {
-      online: Array.isArray(frigateData),
-      detail: Array.isArray(frigateData) ? frigateDetail : "Offline",
-    },
-    qbittorrent: {
-      online: !!qbitData,
-      detail: qbitData ? qbitDetail : "Offline",
-    },
-    homeassistant: {
-      online: !!haRes,
-      detail: haRes ? "System Ready" : "Offline",
-    },
-    immich: {
-      online: !!immichData,
-      detail: immichData ? immichDetail : "Offline",
-    },
-    lidarr: {
-      online: !!lidarrData,
-      detail: lidarrData ? lidarrDetail : "Offline",
-    },
-    ytdl: {
-      online: !!ytdlData,
-      detail: ytdlData ? ytdlDetail : "Offline",
-    },
-  };
+  return telemetry;
 }

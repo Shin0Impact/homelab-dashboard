@@ -25,14 +25,7 @@ router.get("/services-telemetry", async (req, res) => {
     const servicesStats = await getServicesTelemetry();
     res.json(servicesStats);
   } catch (err) {
-    res.json({
-      frigate: { online: false, detail: "Offline" },
-      qbittorrent: { online: false, detail: "Offline" },
-      homeassistant: { online: false, detail: "Offline" },
-      immich: { online: false, detail: "Offline" },
-      lidarr: { online: false, detail: "Offline" },
-      ytdl: { online: false, detail: "Offline" },
-    });
+    res.json({});
   }
 });
 
