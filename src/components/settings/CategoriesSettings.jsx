@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { useSelector, useDispatch } from "react"
+import { useSelector, useDispatch } from "react-redux"
 import { addCategory, removeCategory } from "../../store/settingsSlice"
 import { Plus, X } from "lucide-react"
 
