@@ -1,53 +1,19 @@
 import React, { useState, useEffect } from "react"
-import {
-  Activity,
-  Boxes,
-  HardDrive,
-  RefreshCw,
-  Search,
-  ExternalLink,
-  Wifi,
-  Play,
-  Square,
-  Loader2,
-} from "lucide-react"
-import {
-  CategoryTag,
-  ServiceIcon,
-  StatusDot,
-  glass,
-  useCompactMode,
-  useDynamicPolling,
-} from "./UIHelpers"
+import { Search } from "lucide-react"
+import { glass, useCompactMode, useDynamicPolling } from "./UIHelpers"
+import { StatCards } from "./dashboard/StatCards"
+import { ServiceCard } from "./dashboard/ServiceCard"
 
 export function Dashboard({ services = [], categories = [], onRefresh }) {
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState("All")
   const [loadingMap, setLoadingMap] = useState({})
   
-  // Dynamic Tailscale State
-  const [tailscale, setTailscale] = useState({
-    connected: false,
-    devicesCount: 0,
-    loading: true,
-  })
+  const [tailscale, setTailscale] = useState({ connected: false, devicesCount: 0, loading: true })
+  const [storage, setStorage] = useState({ usedFormatted: "-- GB", totalFormatted: "-- GB", percentage: 0, drives: [], loading: true })
 
-  // Dynamic Storage State with multi-drive array
-  const [storage, setStorage] = useState({
-    usedFormatted: "-- GB",
-    totalFormatted: "-- GB",
-    percentage: 0,
-    drives: [],
-    loading: true,
-  })
-
-  // Hover state for in-card expanded view
-  const [isHoveredStorage, setIsHoveredStorage] = useState(false)
-
-  // Subscribe to settings customization
   const isCompact = useCompactMode()
 
-  // Fetch Tailscale Telemetry
   const fetchTailscaleStatus = async () => {
     try {
       const res = await fetch("/api/tailscale")
@@ -60,7 +26,6 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
     }
   }
 
-  // Fetch Multi-Drive Storage Telemetry
   const fetchStorageStatus = async () => {
     try {
       const res = await fetch("/api/storage")
@@ -69,13 +34,7 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
         setStorage({ ...data, loading: false })
       }
     } catch {
-      setStorage({
-        usedFormatted: "N/A",
-        totalFormatted: "N/A",
-        percentage: 0,
-        drives: [],
-        loading: false,
-      })
+      setStorage({ usedFormatted: "N/A", totalFormatted: "N/A", percentage: 0, drives: [], loading: false })
     }
   }
 
@@ -84,21 +43,17 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
     fetchStorageStatus()
   }, [])
 
-  // Polling auto-refresh using dynamic slider setting
   useDynamicPolling(() => {
     if (onRefresh) onRefresh()
     fetchTailscaleStatus()
     fetchStorageStatus()
   })
 
-  // Helper to determine if service is online regardless of backend property naming
   const checkIsOnline = (s) => s.online || s.status === "online" || s.state === "running"
-
   const totalContainers = services.length
   const onlineCount = services.filter(checkIsOnline).length
   const offlineCount = totalContainers - onlineCount
 
-  // Extract available categories
   const filterOptions = [
     "All",
     ...new Set([...categories, ...services.map((s) => s.category).filter(Boolean)]),
@@ -111,17 +66,13 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
     return matchesQuery && matchesFilter
   })
 
-  // Start / Stop Toggle Handler
   const handleToggleContainer = async (service) => {
     const isOnline = checkIsOnline(service)
     const action = isOnline ? "stop" : "start"
-
     setLoadingMap((prev) => ({ ...prev, [service.id]: true }))
 
     try {
-      const res = await fetch(`/api/containers/${service.id}/${action}`, {
-        method: "POST",
-      })
+      const res = await fetch(`/api/containers/${service.id}/${action}`, { method: "POST" })
       if (res.ok && onRefresh) {
         await onRefresh()
       }
@@ -132,171 +83,20 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
     }
   }
 
-  // Helper to resolve URL using current browser host
-  const getLaunchUrl = (s) => {
-    const detectedPort =
-      s.port ||
-      (Array.isArray(s.ports) && s.ports.find((p) => p.PublicPort)?.PublicPort)
-
-    if (detectedPort) {
-      return `${window.location.protocol}//${window.location.hostname}:${detectedPort}`
-    }
-
-    if (s.url && s.url !== "#") {
-      try {
-        const parsed = new URL(s.url)
-        if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
-          parsed.hostname = window.location.hostname
-          parsed.protocol = window.location.protocol
-        }
-        return parsed.toString()
-      } catch {
-        return s.url
-      }
-    }
-
-    return null
-  }
-
   return (
     <div className={`w-full transition-all ${isCompact ? "space-y-3 p-3 sm:p-4" : "space-y-5 p-4 sm:p-6 md:p-8"}`}>
-      {/* 1. Stat Cards */}
-      <div className={`grid grid-cols-2 lg:grid-cols-4 ${isCompact ? "gap-2" : "gap-3"}`}>
-        {/* Total Containers */}
-        <div className={`flex flex-col justify-between rounded-xl transition-all ${isCompact ? "p-2.5 h-28" : "p-4 h-32"} ${glass}`}>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">
-              Total Containers
-            </span>
-            <div className={`flex items-center justify-center rounded-lg bg-teal-500/15 text-teal-400 ${isCompact ? "h-6 w-6" : "h-8 w-8"}`}>
-              <Boxes className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
-            </div>
-          </div>
-          <div>
-            <p className={`font-bold ${isCompact ? "text-xl" : "text-2xl"}`}>{totalContainers}</p>
-            <p className="text-[11px] text-muted-foreground truncate">
-              Discovered via Socket
-            </p>
-          </div>
-        </div>
+      <StatCards
+        isCompact={isCompact}
+        totalContainers={totalContainers}
+        onlineCount={onlineCount}
+        offlineCount={offlineCount}
+        storage={storage}
+        tailscale={tailscale}
+      />
 
-        {/* Services Online */}
-        <div className={`flex flex-col justify-between rounded-xl transition-all ${isCompact ? "p-2.5 h-28" : "p-4 h-32"} ${glass}`}>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">
-              Services Online
-            </span>
-            <div className={`flex items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400 ${isCompact ? "h-6 w-6" : "h-8 w-8"}`}>
-              <Activity className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
-            </div>
-          </div>
-          <div>
-            <p className={`font-bold ${isCompact ? "text-xl" : "text-2xl"}`}>{onlineCount}</p>
-            <p className="text-[11px] text-muted-foreground truncate">
-              {offlineCount} offline
-            </p>
-          </div>
-        </div>
-
-        {/* Storage Multi-Drive In-Card Expandable Card */}
-        <div
-          className={`group flex flex-col justify-between rounded-xl transition-all duration-200 cursor-pointer ${
-            isCompact ? "p-2.5 h-28" : "p-4 h-32"
-          } ${glass} hover:border-amber-500/30`}
-          onMouseEnter={() => setIsHoveredStorage(true)}
-          onMouseLeave={() => setIsHoveredStorage(false)}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">
-              Storage
-            </span>
-            <div className={`flex items-center justify-center rounded-lg bg-amber-500/15 text-amber-400 ${isCompact ? "h-6 w-6" : "h-8 w-8"}`}>
-              <HardDrive className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
-            </div>
-          </div>
-
-          {!isHoveredStorage || !storage.drives || storage.drives.length === 0 ? (
-            /* Normal Default View */
-            <div>
-              <p className={`font-bold ${isCompact ? "text-xl" : "text-2xl"}`}>
-                {storage.loading ? "Checking..." : storage.usedFormatted}
-              </p>
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                <span className="truncate">of {storage.totalFormatted} pool</span>
-                {storage.drives && storage.drives.length > 0 && (
-                  <span className="text-[10px] text-amber-400/80 font-medium group-hover:text-amber-300">
-                    (Hover details)
-                  </span>
-                )}
-              </div>
-            </div>
-          ) : (
-            /* In-Card Expanded Drive View on Hover */
-            <div className="my-auto space-y-1.5 overflow-y-auto pr-0.5 max-h-[4.5rem] [scrollbar-width:none]">
-              {storage.drives.map((d, i) => (
-                <div key={i} className="space-y-0.5">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="truncate font-mono font-medium text-foreground max-w-[100px]" title={d.mount}>
-                      {d.mount}
-                    </span>
-                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-                      {d.usedFormatted} / {d.totalFormatted}
-                    </span>
-                  </div>
-                  <div className="h-1 w-full overflow-hidden rounded-full bg-secondary/80">
-                    <div
-                      className={`h-full transition-all duration-300 ${
-                        d.percentage > 85
-                          ? "bg-red-500"
-                          : d.percentage > 70
-                          ? "bg-amber-500"
-                          : "bg-teal-400"
-                      }`}
-                      style={{ width: `${Math.min(100, Math.max(0, d.percentage))}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Tailscale Stat Card */}
-        <div className={`flex flex-col justify-between rounded-xl transition-all ${isCompact ? "p-2.5 h-28" : "p-4 h-32"} ${glass}`}>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">
-              Tailscale
-            </span>
-            <div className={`flex items-center justify-center rounded-lg ${
-              tailscale.connected 
-                ? "bg-purple-500/15 text-purple-400" 
-                : "bg-red-500/15 text-red-400"
-            } ${isCompact ? "h-6 w-6" : "h-8 w-8"}`}>
-              <Wifi className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
-            </div>
-          </div>
-          <div>
-            <p className={`font-bold ${isCompact ? "text-lg" : "text-xl"}`}>
-              {tailscale.loading 
-                ? "Checking..." 
-                : tailscale.connected 
-                ? "Connected" 
-                : "Disconnected"}
-            </p>
-            <p className="text-[11px] text-muted-foreground truncate">
-              {tailscale.connected 
-                ? `${tailscale.devicesCount} devices in tailnet` 
-                : "Mesh VPN offline"}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. Search Bar & Horizontal Category Scroll */}
+      {/* Filter & Search Bar */}
       <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between ${isCompact ? "gap-2" : "gap-3"}`}>
-        <div
-          className={`flex items-center gap-2 rounded-xl px-3.5 sm:w-72 ${isCompact ? "py-1.5" : "py-2.5"} ${glass}`}
-        >
+        <div className={`flex items-center gap-2 rounded-xl px-3.5 sm:w-72 ${isCompact ? "py-1.5" : "py-2.5"} ${glass}`}>
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
           <input
             value={query}
@@ -306,7 +106,6 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
           />
         </div>
 
-        {/* Horizontally Scrollable Categories */}
         <div className="flex w-full items-center gap-2 overflow-x-auto pb-1 sm:w-auto sm:pb-0 [scrollbar-width:none]">
           {filterOptions.map((f) => (
             <button
@@ -326,118 +125,22 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
         </div>
       </div>
 
-      {/* 3. Responsive Container Grid */}
+      {/* Services Grid */}
       <div className={`grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 ${isCompact ? "gap-2.5" : "gap-3.5"}`}>
-        {filteredServices.map((s) => {
-          const isOnline = checkIsOnline(s)
-          const computedUrl = getLaunchUrl(s)
-          const isLoading = !!loadingMap[s.id]
-
-          return (
-            <div
-              key={s.id}
-              className={`flex flex-col justify-between rounded-2xl transition-all hover:bg-secondary/20 ${
-                isCompact ? "p-3" : "p-4"
-              } ${glass}`}
-            >
-              <div>
-                <div className="flex items-start justify-between gap-2">
-                  <div className={`flex items-center justify-center rounded-xl bg-secondary/80 ring-1 ring-white/5 ${
-                    isCompact ? "h-9 w-9" : "h-11 w-11"
-                  }`}>
-                    <ServiceIcon service={s} className={isCompact ? "h-5 w-5" : "h-6 w-6"} />
-                  </div>
-                  <div className="flex items-center gap-1.5 rounded-full bg-secondary/50 px-2.5 py-0.5">
-                    <StatusDot online={isOnline} />
-                    <span className="text-[11px] font-medium">
-                      {isOnline ? "Running" : "Exited"}
-                    </span>
-                  </div>
-                </div>
-
-                <div className={isCompact ? "mt-2" : "mt-3"}>
-                  <h3 className={`truncate font-semibold ${isCompact ? "text-sm" : "text-base"}`}>{s.name}</h3>
-                  <div className="mt-1 flex items-center gap-2">
-                    <CategoryTag category={s.category} />
-                    <span className="truncate font-mono text-[11px] text-muted-foreground">
-                      {s.image || (s.port ? `:${s.port}` : "")}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className={`flex items-center justify-between gap-2 border-t border-white/5 ${
-                isCompact ? "mt-3 pt-2" : "mt-4 pt-3"
-              }`}>
-                <div className="flex items-center gap-1.5">
-                  {/* Start / Stop Action Button */}
-                  <button
-                    onClick={() => handleToggleContainer(s)}
-                    disabled={isLoading}
-                    title={isOnline ? "Stop Container" : "Start Container"}
-                    className={`flex items-center justify-center rounded-lg border transition-colors ${
-                      isCompact ? "h-8 w-8" : "h-9 w-9"
-                    } ${
-                      isOnline
-                        ? "border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20"
-                        : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
-                    } ${isLoading ? "cursor-not-allowed opacity-50" : ""}`}
-                  >
-                    {isLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : isOnline ? (
-                      <Square className="h-3.5 w-3.5 fill-current" />
-                    ) : (
-                      <Play className="h-3.5 w-3.5 fill-current" />
-                    )}
-                  </button>
-
-                  {/* Refresh Button */}
-                  {onRefresh && (
-                    <button
-                      onClick={onRefresh}
-                      className={`flex items-center justify-center rounded-lg bg-secondary/40 text-muted-foreground hover:text-foreground ${
-                        isCompact ? "h-8 w-8" : "h-9 w-9"
-                      }`}
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Dynamic Launch Link */}
-                {computedUrl ? (
-                  <a
-                    href={computedUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className={`flex items-center gap-2 rounded-xl bg-teal-500/15 font-semibold text-teal-400 transition-colors hover:bg-teal-500/25 ${
-                      isCompact ? "px-3 py-1.5 text-[11px]" : "px-4 py-2 text-xs"
-                    }`}
-                  >
-                    Launch
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                ) : (
-                  <button
-                    disabled
-                    className={`rounded-xl bg-secondary/30 font-medium text-muted-foreground/50 cursor-not-allowed ${
-                      isCompact ? "px-3 py-1.5 text-[11px]" : "px-4 py-2 text-xs"
-                    }`}
-                  >
-                    No Port
-                  </button>
-                )}
-              </div>
-            </div>
-          )
-        })}
+        {filteredServices.map((s) => (
+          <ServiceCard
+            key={s.id}
+            service={s}
+            isCompact={isCompact}
+            isOnline={checkIsOnline(s)}
+            isLoading={!!loadingMap[s.id]}
+            onToggle={handleToggleContainer}
+            onRefresh={onRefresh}
+          />
+        ))}
 
         {filteredServices.length === 0 && (
-          <div
-            className={`col-span-full py-12 text-center text-sm text-muted-foreground ${glass} rounded-2xl`}
-          >
+          <div className={`col-span-full rounded-2xl py-12 text-center text-sm text-muted-foreground ${glass}`}>
             No matching services found.
           </div>
         )}
