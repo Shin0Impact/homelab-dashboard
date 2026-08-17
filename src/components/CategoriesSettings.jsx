@@ -1,6 +1,6 @@
 import React, { useState } from "react"
 import { useSelector, useDispatch } from "react"
-import { addCategory, removeCategory } from "../../store/settingsSlice"
+import { addCategory, removeCategory } from "../store/settingsSlice"
 import { Plus, X } from "lucide-react"
 
 const glass =
