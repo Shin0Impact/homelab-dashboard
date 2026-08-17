@@ -8,7 +8,7 @@ import { BackupSettings } from "./settings/BackupSettings"
 
 export function Settings() {
   const dispatch = useDispatch()
-  const { categories, compact, theme, refresh } = useSelector((state) => state.settings)
+  const { categories, theme, refresh } = useSelector((state) => state.settings)
   const token = localStorage.getItem("homelab_token")
 
   useEffect(() => {
@@ -31,15 +31,20 @@ export function Settings() {
 
   useEffect(() => {
     if (!token) return
+    
+    // Sync refresh value to localStorage for components relying on window events
+    localStorage.setItem("homelab_refresh", String(refresh))
+    window.dispatchEvent(new Event("homelab_settings_updated"))
+
     fetch("/api/settings", {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ categories, compact, theme, refresh }),
+      body: JSON.stringify({ categories, theme, refresh }),
     }).catch((e) => console.error("Failed to sync settings to server", e))
-  }, [categories, compact, theme, refresh, token])
+  }, [categories, theme, refresh, token])
 
   return (
     <div className="grid max-w-4xl grid-cols-1 gap-6 p-8 lg:grid-cols-2">

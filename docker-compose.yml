@@ -11,5 +11,7 @@ services:
       - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock
       - /usr/bin/tailscale:/usr/bin/tailscale:ro
       - /:/host:ro
+      # Add database persistence directory
+      - ./data:/app/data
     environment:
       - NODE_ENV=production

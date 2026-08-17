@@ -1,6 +1,6 @@
 import React from "react"
 import { useSelector, useDispatch } from "react-redux"
-import { setCompact, setTheme, setRefresh } from "../../store/settingsSlice"
+import { setTheme, setRefresh } from "../../store/settingsSlice"
 import { Moon, Sun, Sparkles } from "lucide-react"
 
 const glass =
@@ -12,27 +12,9 @@ const THEME_OPTIONS = [
   { id: "light", label: "Light Mode", icon: Sun },
 ]
 
-function Toggle({ on, onChange }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!on)}
-      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-        on ? "bg-primary" : "bg-secondary"
-      }`}
-    >
-      <span
-        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ease-in-out ${
-          on ? "translate-x-5" : "translate-x-0"
-        }`}
-      />
-    </button>
-  )
-}
-
 export function AppearanceSettings() {
   const dispatch = useDispatch()
-  const { compact, theme = "default", refresh } = useSelector((state) => state.settings)
+  const { theme = "default", refresh = 10 } = useSelector((state) => state.settings)
 
   return (
     <div className={`rounded-2xl p-6 ${glass}`}>
@@ -64,14 +46,6 @@ export function AppearanceSettings() {
               )
             })}
           </div>
-        </div>
-
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium">Compact Mode</p>
-            <p className="text-xs text-muted-foreground">Tighter cards and spacing.</p>
-          </div>
-          <Toggle on={compact} onChange={(val) => dispatch(setCompact(val))} />
         </div>
 
         <div>
