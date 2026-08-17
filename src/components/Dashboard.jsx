@@ -32,12 +32,17 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
     loading: true,
   })
 
-  // Dynamic Storage State
+  // Dynamic Storage State with multi-drive array
   const [storage, setStorage] = useState({
     usedFormatted: "-- GB",
     totalFormatted: "-- GB",
+    percentage: 0,
+    drives: [],
     loading: true,
   })
+
+  // Hover state for storage breakdown tooltip
+  const [showStorageTooltip, setShowStorageTooltip] = useState(false)
 
   // Subscribe to settings customization
   const isCompact = useCompactMode()
@@ -55,7 +60,7 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
     }
   }
 
-  // Fetch Storage Telemetry
+  // Fetch Multi-Drive Storage Telemetry
   const fetchStorageStatus = async () => {
     try {
       const res = await fetch("/api/storage")
@@ -64,7 +69,13 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
         setStorage({ ...data, loading: false })
       }
     } catch {
-      setStorage({ usedFormatted: "N/A", totalFormatted: "N/A", loading: false })
+      setStorage({
+        usedFormatted: "N/A",
+        totalFormatted: "N/A",
+        percentage: 0,
+        drives: [],
+        loading: false,
+      })
     }
   }
 
@@ -183,8 +194,12 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
           </p>
         </div>
 
-        {/* Storage (Dynamic) */}
-        <div className={`rounded-xl transition-all ${isCompact ? "p-2.5" : "p-4"} ${glass}`}>
+        {/* Storage Multi-Drive Hover Card */}
+        <div
+          className={`relative rounded-xl transition-all cursor-pointer ${isCompact ? "p-2.5" : "p-4"} ${glass}`}
+          onMouseEnter={() => setShowStorageTooltip(true)}
+          onMouseLeave={() => setShowStorageTooltip(false)}
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">
               Storage
@@ -196,9 +211,52 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
           <p className={`font-bold ${isCompact ? "mt-1 text-xl" : "mt-2 text-2xl"}`}>
             {storage.loading ? "Checking..." : storage.usedFormatted}
           </p>
-          <p className="text-[11px] text-muted-foreground">
-            of {storage.totalFormatted} pool used
+          <p className="text-[11px] text-muted-foreground flex items-center justify-between">
+            <span>of {storage.totalFormatted} pool</span>
+            {storage.drives && storage.drives.length > 0 && (
+              <span className="text-[10px] text-amber-400/80 font-medium">(Hover for details)</span>
+            )}
           </p>
+
+          {/* Hover Breakdown Popover */}
+          {showStorageTooltip && storage.drives && storage.drives.length > 0 && (
+            <div className="absolute left-0 top-full mt-2 w-72 sm:w-80 z-50 rounded-xl border border-white/10 bg-slate-900/95 p-3.5 shadow-2xl backdrop-blur-md">
+              <div className="mb-2 flex items-center justify-between border-b border-white/10 pb-1.5">
+                <span className="text-xs font-semibold text-foreground">
+                  Drive Breakdown ({storage.drives.length})
+                </span>
+                <span className="text-[11px] font-mono text-amber-400">
+                  {storage.percentage}% used
+                </span>
+              </div>
+              <div className="max-h-56 space-y-2.5 overflow-y-auto pr-1 text-xs [scrollbar-width:thin]">
+                {storage.drives.map((d, i) => (
+                  <div key={i} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="truncate font-mono font-medium text-slate-200" title={d.mount}>
+                        {d.mount}
+                      </span>
+                      <span className="ml-2 shrink-0 font-mono text-[11px] text-muted-foreground">
+                        {d.usedFormatted} / {d.totalFormatted}
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+                      <div
+                        className={`h-full transition-all duration-300 ${
+                          d.percentage > 85
+                            ? "bg-red-500"
+                            : d.percentage > 70
+                            ? "bg-amber-500"
+                            : "bg-emerald-500"
+                        }`}
+                        style={{ width: `${Math.min(100, Math.max(0, d.percentage))}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Tailscale Stat Card (Dynamic) */}
