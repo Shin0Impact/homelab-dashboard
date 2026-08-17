@@ -122,17 +122,16 @@ export async function getServicesTelemetry() {
 
   // 1. Lidarr YT Downloader
   if (ytdlRes?.data) {
-    const config = ytdlRes.data;
-    const isSchedulerActive = config.scheduler_enabled;
-    const pathConflict = config.path_conflict;
+    // Extract queued items count from Lidarr queue API response
+    const lidarrQueue = lidarrRes?.data;
+    const queueList = Array.isArray(lidarrQueue)
+      ? lidarrQueue
+      : lidarrQueue?.records || [];
+    const queueCount = queueList.length;
 
     telemetry.ytdl = {
       label: "Lidarr YT Downloader",
-      detail: pathConflict
-        ? "Path Conflict Detected"
-        : isSchedulerActive
-          ? "Scheduler Active • Operational"
-          : "Ready • Service Active",
+      detail: queueCount > 0 ? `${queueCount} in Queue` : "0 in Queue",
       status: "online",
       priority: true,
     };
@@ -146,7 +145,7 @@ export async function getServicesTelemetry() {
 
     telemetry.ytdl = {
       label: "Lidarr YT Downloader",
-      detail: fallback?.online ? "Ready • Service Active" : "Container Offline",
+      detail: fallback?.online ? "0 in Queue" : "Container Offline",
       status: fallback?.online ? "online" : "offline",
       priority: true,
     };
