@@ -9,17 +9,17 @@ import {
   Home,
   Image,
   Music,
-  Video,
+  Youtube,
 } from "lucide-react";
 import { glass } from "../UIHelpers";
 
 const SERVICE_ICONS = {
+  ytdl: { icon: Youtube, color: "text-red-500", border: "border-red-500/30 bg-red-500/5" },
+  lidarr: { icon: Music, color: "text-emerald-400" },
   frigate: { icon: Camera, color: "text-cyan-400" },
   qbittorrent: { icon: Download, color: "text-blue-400" },
   homeassistant: { icon: Home, color: "text-amber-400" },
   immich: { icon: Image, color: "text-purple-400" },
-  lidarr: { icon: Music, color: "text-emerald-400" },
-  ytdl: { icon: Video, color: "text-red-400" },
 };
 
 export function StatCards({
@@ -33,16 +33,20 @@ export function StatCards({
 }) {
   const [isHoveredStorage, setIsHoveredStorage] = useState(false);
 
-  // Filter running/online services
+  // Sort active services so Lidarr YT Downloader (or prioritized items) always render first
   const activeServices = servicesTelemetry
-    ? Object.entries(servicesTelemetry).filter(
-        ([_, data]) => data && data.status === "online"
-      )
+    ? Object.entries(servicesTelemetry)
+        .filter(([_, data]) => data && data.status === "online")
+        .sort(([keyA, dataA], [keyB, dataB]) => {
+          if (dataA.priority || keyA === "ytdl") return -1;
+          if (dataB.priority || keyB === "ytdl") return 1;
+          return 0;
+        })
     : [];
 
   return (
     <div className="space-y-3">
-      {/* Primary System Stat Cards */}
+      {/* System Overview Stat Cards */}
       <div
         className={`grid grid-cols-2 lg:grid-cols-4 ${
           isCompact ? "gap-2" : "gap-3"
@@ -213,7 +217,7 @@ export function StatCards({
         </div>
       </div>
 
-      {/* Dynamic Service Telemetry Grid with Full Width Card Spacing */}
+      {/* Priority Service Telemetry Bar */}
       {activeServices.length > 0 && (
         <div className="flex flex-wrap gap-2.5 pt-1">
           {activeServices.map(([key, data]) => {
@@ -222,11 +226,12 @@ export function StatCards({
               color: "text-teal-400",
             };
             const IconComponent = serviceConfig.icon;
+            const extraBorder = serviceConfig.border ? serviceConfig.border : "";
 
             return (
               <div
                 key={key}
-                className={`flex min-w-[240px] flex-1 items-center gap-3 rounded-xl p-3 ${glass}`}
+                className={`flex min-w-[240px] flex-1 items-center gap-3 rounded-xl p-3 ${glass} ${extraBorder}`}
               >
                 <div
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary/50 ${serviceConfig.color}`}
