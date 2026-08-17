@@ -1,17 +1,16 @@
-const FETCH_TIMEOUT_MS = 3000;
+import { docker } from "./dockerUtils.js";
 
-// Host candidates to reach services across host, container bridge, LAN, or Tailscale
+const FETCH_TIMEOUT_MS = 2500;
+
 const FALLBACK_HOSTS = [
   "127.0.0.1",
   "localhost",
   "172.17.0.1",
   "host.docker.internal",
-  process.env.TAILSCALE_IP,
-  process.env.SERVER_LAN_IP,
-].filter(Boolean);
+];
 
 /**
- * Attempts fetching an API endpoint across multiple container and host URL combinations.
+ * Attempts contacting a service over network API endpoints.
  */
 async function fetchServiceEndpoint(
   containerName,
@@ -20,10 +19,9 @@ async function fetchServiceEndpoint(
   options = {},
 ) {
   const candidateUrls = [
-    process.env[`${containerName.toUpperCase().replace(/-/g, "_")}_URL`],
     `http://${containerName}:${defaultPort}${path}`,
     ...FALLBACK_HOSTS.map((host) => `http://${host}:${defaultPort}${path}`),
-  ].filter(Boolean);
+  ];
 
   for (const url of candidateUrls) {
     const controller = new AbortController();
@@ -42,6 +40,32 @@ async function fetchServiceEndpoint(
   return null;
 }
 
+/**
+ * Checks if a service container exists and is running via Docker Socket as a fallback.
+ */
+async function checkDockerContainerRunning(possibleNames) {
+  try {
+    const containers = await docker.listContainers({ all: false });
+    const match = containers.find((c) =>
+      c.Names.some((n) =>
+        possibleNames.some(
+          (name) => n.replace("/", "").toLowerCase() === name.toLowerCase(),
+        ),
+      ),
+    );
+    if (match) {
+      return {
+        online: true,
+        status: match.Status || "Running",
+        name: match.Names[0].replace("/", ""),
+      };
+    }
+  } catch {
+    // Docker socket unavailable or not mounted
+  }
+  return null;
+}
+
 function formatBytes(bytes) {
   if (!bytes || bytes === 0) return "0 B";
   const k = 1024;
@@ -53,10 +77,8 @@ function formatBytes(bytes) {
 export async function getServicesTelemetry() {
   const [frigateRes, qbitRes, haRes, immichRes, lidarrRes, ytdlRes] =
     await Promise.all([
-      // 1. Frigate
       fetchServiceEndpoint("frigate", 5000, "/api/events?limit=1"),
 
-      // 2. qBittorrent (Transfer info or Maindata fallback)
       fetchServiceEndpoint("qbittorrent", 8080, "/api/v2/transfer/info").then(
         async (res) => {
           if (res) return res;
@@ -68,40 +90,23 @@ export async function getServicesTelemetry() {
         },
       ),
 
-      // 3. Home Assistant
-      fetchServiceEndpoint("homeassistant", 8123, "/api/states", {
-        headers: process.env.HA_TOKEN
-          ? { Authorization: `Bearer ${process.env.HA_TOKEN}` }
-          : {},
-      }),
+      fetchServiceEndpoint("homeassistant", 8123, "/api/states"),
 
-      // 4. Immich (Tries server-info/stats then server/statistics fallback)
-      fetchServiceEndpoint("immich-server", 2283, "/api/server-info/stats", {
-        headers: process.env.IMMICH_API_KEY
-          ? { "x-api-key": process.env.IMMICH_API_KEY }
-          : {},
-      }).then(async (res) => {
+      fetchServiceEndpoint(
+        "immich-server",
+        2283,
+        "/api/server-info/stats",
+      ).then(async (res) => {
         if (res) return res;
         return fetchServiceEndpoint(
           "immich-server",
           2283,
           "/api/server/statistics",
-          {
-            headers: process.env.IMMICH_API_KEY
-              ? { "x-api-key": process.env.IMMICH_API_KEY }
-              : {},
-          },
         );
       }),
 
-      // 5. Lidarr Queue
-      fetchServiceEndpoint("lidarr", 8686, "/api/v1/queue", {
-        headers: process.env.LIDARR_API_KEY
-          ? { "X-Api-Key": process.env.LIDARR_API_KEY }
-          : {},
-      }),
+      fetchServiceEndpoint("lidarr", 8686, "/api/v1/queue"),
 
-      // 6. YTDL / TubeSync
       fetchServiceEndpoint("youtube-dl", 8081, "/api/history").then(
         async (res) => {
           if (res) return res;
@@ -112,7 +117,7 @@ export async function getServicesTelemetry() {
 
   const telemetry = {};
 
-  // Parse Frigate
+  // 1. Frigate
   if (frigateRes?.data) {
     const events = frigateRes.data;
     if (Array.isArray(events) && events.length > 0) {
@@ -136,9 +141,18 @@ export async function getServicesTelemetry() {
         status: "online",
       };
     }
+  } else {
+    const fallback = await checkDockerContainerRunning(["frigate"]);
+    if (fallback) {
+      telemetry.frigate = {
+        label: "Frigate",
+        detail: "Container Active",
+        status: "online",
+      };
+    }
   }
 
-  // Parse qBittorrent
+  // 2. qBittorrent
   if (qbitRes?.data) {
     const data = qbitRes.data;
     const serverState = data.server_state || data;
@@ -162,30 +176,43 @@ export async function getServicesTelemetry() {
       detail,
       status: "online",
     };
-  }
-
-  // Parse Home Assistant
-  if (haRes?.data) {
-    const states = haRes.data;
-    if (Array.isArray(states)) {
-      const active = states.filter(
-        (e) => e.state !== "unavailable" && e.state !== "unknown",
-      ).length;
-      telemetry.homeassistant = {
-        label: "Home Assistant",
-        detail: `${active} Active Entities`,
-        status: "online",
-      };
-    } else {
-      telemetry.homeassistant = {
-        label: "Home Assistant",
-        detail: "System Connected",
+  } else {
+    const fallback = await checkDockerContainerRunning(["qbittorrent", "qbit"]);
+    if (fallback) {
+      telemetry.qbittorrent = {
+        label: "qBittorrent",
+        detail: "Container Active",
         status: "online",
       };
     }
   }
 
-  // Parse Immich
+  // 3. Home Assistant
+  if (haRes?.data && Array.isArray(haRes.data)) {
+    const active = haRes.data.filter(
+      (e) => e.state !== "unavailable" && e.state !== "unknown",
+    ).length;
+    telemetry.homeassistant = {
+      label: "Home Assistant",
+      detail: `${active} Active Entities`,
+      status: "online",
+    };
+  } else {
+    const fallback = await checkDockerContainerRunning([
+      "homeassistant",
+      "home-assistant",
+      "ha",
+    ]);
+    if (fallback) {
+      telemetry.homeassistant = {
+        label: "Home Assistant",
+        detail: "Container Active",
+        status: "online",
+      };
+    }
+  }
+
+  // 4. Immich
   if (immichRes?.data) {
     const stats = immichRes.data;
     const photos = stats.photos || stats.photosCount || 0;
@@ -197,9 +224,22 @@ export async function getServicesTelemetry() {
       detail: `${photos} Photos, ${videos} Videos (${usage})`,
       status: "online",
     };
+  } else {
+    const fallback = await checkDockerContainerRunning([
+      "immich-server",
+      "immich_server",
+      "immich",
+    ]);
+    if (fallback) {
+      telemetry.immich = {
+        label: "Immich",
+        detail: "Container Active",
+        status: "online",
+      };
+    }
   }
 
-  // Parse Lidarr
+  // 5. Lidarr
   if (lidarrRes?.data) {
     const queueData = lidarrRes.data;
     const queueList = Array.isArray(queueData)
@@ -218,9 +258,18 @@ export async function getServicesTelemetry() {
           : "Queue Empty",
       status: "online",
     };
+  } else {
+    const fallback = await checkDockerContainerRunning(["lidarr"]);
+    if (fallback) {
+      telemetry.lidarr = {
+        label: "Lidarr",
+        detail: "Container Active",
+        status: "online",
+      };
+    }
   }
 
-  // Parse YTDL
+  // 6. YTDL / TubeSync
   if (ytdlRes?.data) {
     const historyData = ytdlRes.data;
     const historyList = Array.isArray(historyData)
@@ -231,6 +280,20 @@ export async function getServicesTelemetry() {
       detail: `${historyList.length} Downloads Completed`,
       status: "online",
     };
+  } else {
+    const fallback = await checkDockerContainerRunning([
+      "youtube-dl",
+      "ytdl",
+      "tubesync",
+      "lidarr-youtube-downloader",
+    ]);
+    if (fallback) {
+      telemetry.ytdl = {
+        label: "YTDL",
+        detail: "Container Active",
+        status: "online",
+      };
+    }
   }
 
   return telemetry;

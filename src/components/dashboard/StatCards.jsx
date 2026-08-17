@@ -33,7 +33,7 @@ export function StatCards({
 }) {
   const [isHoveredStorage, setIsHoveredStorage] = useState(false);
 
-  // Filter only online services
+  // Filter running/online services
   const activeServices = servicesTelemetry
     ? Object.entries(servicesTelemetry).filter(
         ([_, data]) => data && data.status === "online"
@@ -213,7 +213,7 @@ export function StatCards({
         </div>
       </div>
 
-      {/* Dynamic Service Telemetry Grid: Expands smoothly across available space */}
+      {/* Dynamic Service Telemetry Grid with Full Width Card Spacing */}
       {activeServices.length > 0 && (
         <div className="flex flex-wrap gap-2.5 pt-1">
           {activeServices.map(([key, data]) => {
@@ -226,7 +226,7 @@ export function StatCards({
             return (
               <div
                 key={key}
-                className={`flex min-w-[220px] flex-1 items-center gap-3 rounded-xl p-3 ${glass}`}
+                className={`flex min-w-[240px] flex-1 items-center gap-3 rounded-xl p-3 ${glass}`}
               >
                 <div
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary/50 ${serviceConfig.color}`}
@@ -238,7 +238,7 @@ export function StatCards({
                     {data.label}
                   </p>
                   <p
-                    className="text-xs font-semibold text-foreground break-words leading-tight"
+                    className="text-xs font-semibold leading-tight text-foreground break-words"
                     title={data.detail}
                   >
                     {data.detail}
