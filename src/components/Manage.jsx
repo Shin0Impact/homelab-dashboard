@@ -60,6 +60,8 @@ function ServiceModal({ initial, onClose, onSave }) {
   function handleSave() {
     if (!name.trim()) return
 
+    const isFav = Boolean(initial?.is_favorite || initial?.favorite)
+
     onSave({
       id: initial?.id ?? `custom-${Date.now()}`,
       name: name.trim(),
@@ -67,7 +69,8 @@ function ServiceModal({ initial, onClose, onSave }) {
       category,
       icon,
       online: initial?.online ?? true,
-      is_favorite: initial?.is_favorite ?? false,
+      is_favorite: isFav,
+      favorite: isFav,
       isCustom: true,
     })
   }
@@ -175,6 +178,7 @@ export function Manage({
   const [actionLoadingMap, setActionLoadingMap] = useState({})
 
   const checkIsOnline = (s) => s.online || s.status === "online" || s.state === "running"
+  const checkIsFavorite = (s) => Boolean(s.is_favorite || s.favorite)
 
   function openAdd() {
     setEditing(null)
@@ -192,7 +196,12 @@ export function Manage({
 
   function handleToggleFavorite(s) {
     if (onUpdate) {
-      onUpdate({ ...s, is_favorite: !s.is_favorite })
+      const isFav = !checkIsFavorite(s)
+      onUpdate({
+        ...s,
+        is_favorite: isFav,
+        favorite: isFav,
+      })
     }
   }
 
@@ -290,6 +299,7 @@ export function Manage({
           <tbody>
             {filteredServices.map((s) => {
               const isOnline = checkIsOnline(s)
+              const isFav = checkIsFavorite(s)
               const computedUrl = s.port
                 ? `${window.location.protocol}//${window.location.hostname}:${s.port}`
                 : s.url || "No exposed port"
@@ -365,14 +375,14 @@ export function Manage({
                     <div className="flex items-center justify-end gap-1.5">
                       <button
                         onClick={() => handleToggleFavorite(s)}
-                        title={s.is_favorite ? "Remove from Favorites" : "Add to Favorites"}
+                        title={isFav ? "Remove from Favorites" : "Add to Favorites"}
                         className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
-                          s.is_favorite
+                          isFav
                             ? "text-amber-400 hover:bg-amber-500/10"
                             : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
                         }`}
                       >
-                        <Star className={`h-4 w-4 ${s.is_favorite ? "fill-amber-400" : ""}`} />
+                        <Star className={`h-4 w-4 ${isFav ? "fill-amber-400 text-amber-400" : ""}`} />
                       </button>
                       <button
                         onClick={() => openEdit(s)}
@@ -406,6 +416,7 @@ export function Manage({
       <div className="space-y-3 md:hidden">
         {filteredServices.map((s) => {
           const isOnline = checkIsOnline(s)
+          const isFav = checkIsFavorite(s)
           const computedUrl = s.port
             ? `${window.location.protocol}//${window.location.hostname}:${s.port}`
             : s.url || "No exposed port"
@@ -457,10 +468,10 @@ export function Manage({
                   <button
                     onClick={() => handleToggleFavorite(s)}
                     className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
-                      s.is_favorite ? "text-amber-400 bg-amber-500/10" : "bg-secondary/40 text-muted-foreground"
+                      isFav ? "text-amber-400 bg-amber-500/10" : "bg-secondary/40 text-muted-foreground"
                     }`}
                   >
-                    <Star className={`h-4 w-4 ${s.is_favorite ? "fill-amber-400" : ""}`} />
+                    <Star className={`h-4 w-4 ${isFav ? "fill-amber-400 text-amber-400" : ""}`} />
                   </button>
                   <button
                     onClick={() => openEdit(s)}

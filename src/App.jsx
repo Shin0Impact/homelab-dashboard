@@ -115,8 +115,24 @@ export default function App() {
   }
 
   const handleUpdateService = async (updatedService) => {
-    try {
-      await fetch(`/api/services/${updatedService.id}`, {
+  // Optimistically update local state so UI updates immediately
+  setServices((prev) =>
+    prev.map((s) => (s.id === updatedService.id ? { ...s, ...updatedService } : s))
+  )
+
+  try {
+    const res = await fetch(`/api/services/${updatedService.id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify(updatedService),
+    })
+
+    // Fallback if your backend uses container paths
+    if (!res.ok) {
+      await fetch(`/api/containers/${updatedService.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -124,11 +140,14 @@ export default function App() {
         },
         body: JSON.stringify(updatedService),
       })
-      fetchContainers()
-    } catch (err) {
-      console.error("Failed to update service:", err)
     }
+
+    fetchContainers()
+  } catch (err) {
+    console.error("Failed to update service:", err)
+    fetchContainers() // Revert to server state on error
   }
+}
 
   const handleDeleteService = async (id) => {
     try {
