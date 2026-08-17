@@ -82,65 +82,92 @@ function formatBytes(bytes) {
 }
 
 export async function getServicesTelemetry() {
-  const [frigateRes, qbitRes, haRes, immichRes, lidarrRes, ytdlRes] =
-    await Promise.all([
-      fetchServiceEndpoint("frigate", 5000, "/api/events?limit=1"),
-      fetchServiceEndpoint("qbittorrent", 8080, "/api/v2/transfer/info").then(
-        async (res) =>
-          res ||
-          fetchServiceEndpoint("qbittorrent", 8080, "/api/v2/sync/maindata"),
-      ),
-      fetchServiceEndpoint("homeassistant", 8123, "/api/states"),
-      fetchServiceEndpoint(
-        "immich-server",
-        2283,
-        "/api/server-info/stats",
-      ).then(
-        async (res) =>
-          res ||
-          fetchServiceEndpoint("immich-server", 2283, "/api/server/statistics"),
-      ),
-      fetchServiceEndpoint("lidarr", 8686, "/api/v1/queue"),
+  const [
+    frigateRes,
+    qbitRes,
+    haRes,
+    immichRes,
+    lidarrRes,
+    ytdlStatsRes,
+    ytdlSyncRes,
+  ] = await Promise.all([
+    fetchServiceEndpoint("frigate", 5000, "/api/events?limit=1"),
+    fetchServiceEndpoint("qbittorrent", 8080, "/api/v2/transfer/info").then(
+      async (res) =>
+        res ||
+        fetchServiceEndpoint("qbittorrent", 8080, "/api/v2/sync/maindata"),
+    ),
+    fetchServiceEndpoint("homeassistant", 8123, "/api/states"),
+    fetchServiceEndpoint("immich-server", 2283, "/api/server-info/stats").then(
+      async (res) =>
+        res ||
+        fetchServiceEndpoint("immich-server", 2283, "/api/server/statistics"),
+    ),
+    fetchServiceEndpoint("lidarr", 8686, "/api/v1/queue"),
 
-      fetchServiceEndpoint(
-        "lidarr-youtube-downloader",
-        5000,
-        "/api/config",
-      ).then(
-        async (res) =>
-          res ||
-          fetchServiceEndpoint(
-            "lidarr-youtube-downloader",
-            5005,
-            "/api/config",
-          ),
-      ),
-    ]);
+    // Query Lidarr YT Downloader endpoints on port 5005 (falling back to port 5000)
+    fetchServiceEndpoint("lidarr-youtube-downloader", 5005, "/api/stats").then(
+      async (res) =>
+        res ||
+        fetchServiceEndpoint("lidarr-youtube-downloader", 5000, "/api/stats"),
+    ),
+    fetchServiceEndpoint(
+      "lidarr-youtube-downloader",
+      5005,
+      "/api/sync/status",
+    ).then(
+      async (res) =>
+        res ||
+        fetchServiceEndpoint(
+          "lidarr-youtube-downloader",
+          5000,
+          "/api/sync/status",
+        ),
+    ),
+  ]);
 
   const telemetry = {};
 
-  // 1. Lidarr YT Downloader - Pull queue count directly from Lidarr's queue API
+  // 1. Lidarr YT Downloader
+  const ytdlStats = ytdlStatsRes?.data;
+  const ytdlSync = ytdlSyncRes?.data;
+
+  if (ytdlStats) {
+    let detailText = `${ytdlStats.in_queue ?? 0} in Queue`;
+
+    // Dynamic status text: prioritize active sync status if worker is running
+    if (ytdlSync?.status === "running") {
+      detailText = `Syncing (${ytdlSync.synced_records ?? 0}/${ytdlSync.total_records ?? 0})`;
+    }
+
+    telemetry.ytdl = {
+      label: "Lidarr YT Downloader",
+      detail: detailText,
+      status: "online",
+      priority: true,
+    };
+  } else {
+    const fallback = await checkDockerContainerStatus([
+      "lidarr-youtube-downloader",
+      "lidarr_youtube_downloader",
+      "lidarr-yt-downloader",
+      "angrido/lidarr-downloader",
+    ]);
+
+    telemetry.ytdl = {
+      label: "Lidarr YT Downloader",
+      detail: fallback?.online ? "Online" : "Container Offline",
+      status: fallback?.online ? "online" : "offline",
+      priority: true,
+    };
+  }
+
+  // Helper count for Lidarr
   const lidarrQueue = lidarrRes?.data;
   const queueRecords = Array.isArray(lidarrQueue)
     ? lidarrQueue
     : lidarrQueue?.records || [];
   const activeQueueCount = queueRecords.length;
-
-  const ytdlContainer = await checkDockerContainerStatus([
-    "lidarr-youtube-downloader",
-    "lidarr_youtube_downloader",
-    "lidarr-yt-downloader",
-    "angrido/lidarr-downloader",
-  ]);
-
-  const isYtdlOnline = Boolean(ytdlRes?.data || ytdlContainer?.online);
-
-  telemetry.ytdl = {
-    label: "Lidarr YT Downloader",
-    detail: isYtdlOnline ? `${activeQueueCount} in Queue` : "Container Offline",
-    status: isYtdlOnline ? "online" : "offline",
-    priority: true,
-  };
 
   // 2. Frigate
   if (frigateRes?.data) {
@@ -213,7 +240,7 @@ export async function getServicesTelemetry() {
     telemetry.qbittorrent = {
       label: "qBittorrent",
       detail: fallback?.online ? "Container Active" : "Offline",
-      status: fallback?.online ? "online" : "offline",
+      status: fallback?.online ? "offline" : "offline",
     };
   }
 
