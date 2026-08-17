@@ -9,12 +9,12 @@ import {
   Home,
   Image,
   Music,
-  Youtube,
+  Video, // <-- Replaced Youtube with Video
 } from "lucide-react";
 import { glass } from "../UIHelpers";
 
 const SERVICE_ICONS = {
-  ytdl: { icon: Youtube, color: "text-red-500", border: "border-red-500/30 bg-red-500/5" },
+  ytdl: { icon: Video, color: "text-red-500", border: "border-red-500/30 bg-red-500/5" },
   lidarr: { icon: Music, color: "text-emerald-400" },
   frigate: { icon: Camera, color: "text-cyan-400" },
   qbittorrent: { icon: Download, color: "text-blue-400" },
