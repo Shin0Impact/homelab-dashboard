@@ -7,7 +7,7 @@ import { Manage } from "./components/Manage"
 import { Stacks } from "./components/Stacks"
 import { Metrics } from "./components/Metrics"
 import { Sidebar, Topbar } from "./components/Navigation"
-import { Settings } from "./components/Settings/"
+import { Settings } from "./components/Settings"
 
 const PAGE_META = {
   dashboard: { title: "Dashboard", subtitle: "Live Container Monitor" },
