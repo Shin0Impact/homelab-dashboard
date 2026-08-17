@@ -10,6 +10,7 @@ export function Dashboard({ services = [], onRefresh }) {
 
   const [tailscale, setTailscale] = useState({ connected: false, devicesCount: 0, loading: true })
   const [storage, setStorage] = useState({ usedFormatted: "-- GB", totalFormatted: "-- GB", percentage: 0, drives: [], loading: true })
+  const [servicesTelemetry, setServicesTelemetry] = useState(null) // Added
 
   const isCompact = useCompactMode()
 
@@ -37,15 +38,29 @@ export function Dashboard({ services = [], onRefresh }) {
     }
   }
 
+  const fetchServicesTelemetry = async () => {
+    try {
+      const res = await fetch("/api/services-telemetry")
+      if (res.ok) {
+        const data = await res.json()
+        setServicesTelemetry(data)
+      }
+    } catch {
+      setServicesTelemetry(null)
+    }
+  }
+
   useEffect(() => {
     fetchTailscaleStatus()
     fetchStorageStatus()
+    fetchServicesTelemetry()
   }, [])
 
   useDynamicPolling(() => {
     if (onRefresh) onRefresh()
     fetchTailscaleStatus()
     fetchStorageStatus()
+    fetchServicesTelemetry()
   })
 
   const checkIsOnline = (s) => s.online || s.status === "online" || s.state === "running"
@@ -86,6 +101,7 @@ export function Dashboard({ services = [], onRefresh }) {
         offlineCount={offlineCount}
         storage={storage}
         tailscale={tailscale}
+        servicesTelemetry={servicesTelemetry}
       />
 
       {/* Search Bar */}
