@@ -57,7 +57,7 @@ export default function App() {
     return token ? { Authorization: `Bearer ${token}` } : {}
   }, [])
 
-  // Telemetry Polling Effect (2s interval)
+  // Telemetry Polling Effect (Fixed 1 second interval / 1000ms)
   useEffect(() => {
     if (!authed) return
 
@@ -75,7 +75,7 @@ export default function App() {
     }
 
     fetchTelemetry()
-    const interval = setInterval(fetchTelemetry, 2000)
+    const interval = setInterval(fetchTelemetry, 1000)
     return () => clearInterval(interval)
   }, [authed, dispatch, getAuthHeaders])
 
@@ -115,7 +115,7 @@ export default function App() {
     }
   }, [getAuthHeaders, applyFavorites])
 
-  // Container Polling Effect (5s interval)
+  // Container Polling Effect (Fixed 5 seconds interval)
   useEffect(() => {
     if (!authed) return
     fetchContainers()
@@ -140,7 +140,6 @@ export default function App() {
   }
 
   const handleUpdateService = async (updatedService) => {
-    // Update local favorite ID list if toggled
     const isFav = Boolean(updatedService.is_favorite || updatedService.favorite)
     let updatedFavs = [...favoriteIds]
 
@@ -153,12 +152,10 @@ export default function App() {
     setFavoriteIds(updatedFavs)
     localStorage.setItem("homelab_favorite_ids", JSON.stringify(updatedFavs))
 
-    // Optimistically update local services state
     setServices((prev) =>
       prev.map((s) => (s.id === updatedService.id ? { ...updatedService, is_favorite: isFav, favorite: isFav } : s))
     )
 
-    // Persist to backend API (best-effort)
     try {
       const res = await fetch(`/api/services/${updatedService.id}`, {
         method: "PUT",
