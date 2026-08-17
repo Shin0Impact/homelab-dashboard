@@ -37,9 +37,10 @@ async function fetchServiceEndpoint(
   return null;
 }
 
-async function checkDockerContainerRunning(possibleNames) {
+// Fixed to search ALL containers (all: true) so stopped/exited containers are detected correctly
+async function checkDockerContainerStatus(possibleNames) {
   try {
-    const containers = await docker.listContainers({ all: false });
+    const containers = await docker.listContainers({ all: true });
     const match = containers.find((c) =>
       c.Names.some((n) =>
         possibleNames.some(
@@ -48,9 +49,11 @@ async function checkDockerContainerRunning(possibleNames) {
       ),
     );
     if (match) {
+      const isRunning = match.State === "running";
       return {
-        online: true,
-        status: match.Status || "Running",
+        exists: true,
+        online: isRunning,
+        status: match.Status || (isRunning ? "Running" : "Exited"),
         name: match.Names[0].replace("/", ""),
       };
     }
@@ -58,6 +61,17 @@ async function checkDockerContainerRunning(possibleNames) {
     // Docker socket fallback unavailable
   }
   return null;
+}
+
+function formatTimeAgo(timestamp) {
+  if (!timestamp) return "";
+  const seconds = Math.floor((Date.now() - timestamp * 1000) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 
 function formatBytes(bytes) {
@@ -88,8 +102,6 @@ export async function getServicesTelemetry() {
           fetchServiceEndpoint("immich-server", 2283, "/api/server/statistics"),
       ),
       fetchServiceEndpoint("lidarr", 8686, "/api/v1/queue"),
-
-      // Explicit check for Lidarr YouTube Downloader API or web endpoints
       fetchServiceEndpoint(
         "lidarr-youtube-downloader",
         8080,
@@ -102,7 +114,7 @@ export async function getServicesTelemetry() {
 
   const telemetry = {};
 
-  // Priority 1: Lidarr YouTube Downloader
+  // 1. Lidarr YT Downloader (Always Priority)
   if (ytdlRes?.data) {
     const historyData = ytdlRes.data;
     const historyList = Array.isArray(historyData)
@@ -116,26 +128,56 @@ export async function getServicesTelemetry() {
       priority: true,
     };
   } else {
-    // Check Docker socket directly for common container name variants
-    const fallback = await checkDockerContainerRunning([
+    const fallback = await checkDockerContainerStatus([
       "lidarr-youtube-downloader",
       "lidarr_youtube_downloader",
       "lidarr-yt-downloader",
       "yt-downloader",
-      "youtube-dl",
+      "angrido/lidarr-downloader",
     ]);
 
-    if (fallback) {
-      telemetry.ytdl = {
-        label: "Lidarr YT Downloader",
-        detail: `Active • ${fallback.status}`,
-        status: "online",
-        priority: true,
-      };
-    }
+    telemetry.ytdl = {
+      label: "Lidarr YT Downloader",
+      detail: fallback ? `Container ${fallback.status}` : "Container Stopped",
+      status: fallback?.online ? "online" : "offline",
+      priority: true,
+    };
   }
 
-  // 2. Lidarr
+  // 2. Frigate (Restored person / event timestamp)
+  if (frigateRes?.data) {
+    const events = frigateRes.data;
+    if (Array.isArray(events) && events.length > 0) {
+      const latest = events[0];
+      const label = latest.label || "motion";
+      const camera = latest.camera || "cam";
+      const timeAgo = formatTimeAgo(latest.start_time);
+      const detailStr = timeAgo
+        ? `${label} (${camera}) • ${timeAgo}`
+        : `${label} (${camera})`;
+
+      telemetry.frigate = {
+        label: "Frigate",
+        detail: detailStr,
+        status: "online",
+      };
+    } else {
+      telemetry.frigate = {
+        label: "Frigate",
+        detail: "No Motion Events",
+        status: "online",
+      };
+    }
+  } else {
+    const fallback = await checkDockerContainerStatus(["frigate"]);
+    telemetry.frigate = {
+      label: "Frigate",
+      detail: fallback?.online ? "Container Active" : "Offline",
+      status: fallback?.online ? "online" : "offline",
+    };
+  }
+
+  // 3. Lidarr
   if (lidarrRes?.data) {
     const queueData = lidarrRes.data;
     const queueList = Array.isArray(queueData)
@@ -145,42 +187,16 @@ export async function getServicesTelemetry() {
 
     telemetry.lidarr = {
       label: "Lidarr",
-      detail: count > 0 ? `${count} Queued Items` : "Queue Empty",
+      detail: count > 0 ? `${count} Queued Items` : "Container Active",
       status: "online",
     };
   } else {
-    const fallback = await checkDockerContainerRunning(["lidarr"]);
-    if (fallback) {
-      telemetry.lidarr = {
-        label: "Lidarr",
-        detail: "Container Active",
-        status: "online",
-      };
-    }
-  }
-
-  // 3. Frigate
-  if (frigateRes?.data) {
-    const events = frigateRes.data;
-    const detailStr =
-      Array.isArray(events) && events.length > 0
-        ? `${events[0].label || "Motion"} (${events[0].camera || "Cam"})`
-        : "No Motion Events";
-
-    telemetry.frigate = {
-      label: "Frigate",
-      detail: detailStr,
-      status: "online",
+    const fallback = await checkDockerContainerStatus(["lidarr"]);
+    telemetry.lidarr = {
+      label: "Lidarr",
+      detail: fallback?.online ? "Container Active" : "Offline",
+      status: fallback?.online ? "online" : "offline",
     };
-  } else {
-    const fallback = await checkDockerContainerRunning(["frigate"]);
-    if (fallback) {
-      telemetry.frigate = {
-        label: "Frigate",
-        detail: "Container Active",
-        status: "online",
-      };
-    }
   }
 
   // 4. qBittorrent
@@ -188,9 +204,6 @@ export async function getServicesTelemetry() {
     const data = qbitRes.data;
     const serverState = data.server_state || data;
     const dlSpeed = ((serverState.dl_info_speed || 0) / (1024 * 1024)).toFixed(
-      1,
-    );
-    const ulSpeed = ((serverState.up_info_speed || 0) / (1024 * 1024)).toFixed(
       1,
     );
 
@@ -201,14 +214,12 @@ export async function getServicesTelemetry() {
       status: "online",
     };
   } else {
-    const fallback = await checkDockerContainerRunning(["qbittorrent", "qbit"]);
-    if (fallback) {
-      telemetry.qbittorrent = {
-        label: "qBittorrent",
-        detail: "Container Active",
-        status: "online",
-      };
-    }
+    const fallback = await checkDockerContainerStatus(["qbittorrent", "qbit"]);
+    telemetry.qbittorrent = {
+      label: "qBittorrent",
+      detail: fallback?.online ? "Container Active" : "Offline",
+      status: fallback?.online ? "online" : "offline",
+    };
   }
 
   // 5. Home Assistant
@@ -222,14 +233,12 @@ export async function getServicesTelemetry() {
       status: "online",
     };
   } else {
-    const fallback = await checkDockerContainerRunning(["homeassistant", "ha"]);
-    if (fallback) {
-      telemetry.homeassistant = {
-        label: "Home Assistant",
-        detail: "Container Active",
-        status: "online",
-      };
-    }
+    const fallback = await checkDockerContainerStatus(["homeassistant", "ha"]);
+    telemetry.homeassistant = {
+      label: "Home Assistant",
+      detail: fallback?.online ? "Container Active" : "Offline",
+      status: fallback?.online ? "online" : "offline",
+    };
   }
 
   // 6. Immich
@@ -242,17 +251,15 @@ export async function getServicesTelemetry() {
       status: "online",
     };
   } else {
-    const fallback = await checkDockerContainerRunning([
+    const fallback = await checkDockerContainerStatus([
       "immich-server",
       "immich",
     ]);
-    if (fallback) {
-      telemetry.immich = {
-        label: "Immich",
-        detail: "Container Active",
-        status: "online",
-      };
-    }
+    telemetry.immich = {
+      label: "Immich",
+      detail: fallback?.online ? "Container Active" : "Offline",
+      status: fallback?.online ? "online" : "offline",
+    };
   }
 
   return telemetry;
