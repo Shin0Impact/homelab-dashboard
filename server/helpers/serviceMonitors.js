@@ -102,32 +102,16 @@ export async function getServicesTelemetry() {
       ),
       fetchServiceEndpoint("lidarr", 8686, "/api/v1/queue"),
 
-      // Query Lidarr YouTube Downloader queue/downloads endpoint on internal port 5000 / host port 5005
       fetchServiceEndpoint(
         "lidarr-youtube-downloader",
         5000,
-        "/api/queue",
+        "/api/config",
       ).then(
         async (res) =>
           res ||
           fetchServiceEndpoint(
             "lidarr-youtube-downloader",
             5005,
-            "/api/queue",
-          ) ||
-          fetchServiceEndpoint(
-            "lidarr-youtube-downloader",
-            5000,
-            "/api/downloads",
-          ) ||
-          fetchServiceEndpoint(
-            "lidarr-youtube-downloader",
-            5005,
-            "/api/downloads",
-          ) ||
-          fetchServiceEndpoint(
-            "lidarr-youtube-downloader",
-            5000,
             "/api/config",
           ),
       ),
@@ -135,50 +119,30 @@ export async function getServicesTelemetry() {
 
   const telemetry = {};
 
-  // 1. Lidarr YT Downloader
-  if (ytdlRes?.data) {
-    const data = ytdlRes.data;
-    const queueList = Array.isArray(data)
-      ? data
-      : data.queue || data.downloads || data.items || [];
+  // 1. Lidarr YT Downloader - Pull queue count directly from Lidarr's queue API
+  const lidarrQueue = lidarrRes?.data;
+  const queueRecords = Array.isArray(lidarrQueue)
+    ? lidarrQueue
+    : lidarrQueue?.records || [];
+  const activeQueueCount = queueRecords.length;
 
-    // Calculate active items pending download
-    const activeCount = Array.isArray(queueList)
-      ? queueList.filter(
-          (item) => item.status !== "completed" && item.status !== "finished",
-        ).length
-      : 0;
+  const ytdlContainer = await checkDockerContainerStatus([
+    "lidarr-youtube-downloader",
+    "lidarr_youtube_downloader",
+    "lidarr-yt-downloader",
+    "angrido/lidarr-downloader",
+  ]);
 
-    const detailText =
-      activeCount > 0
-        ? `${activeCount} in Queue`
-        : queueList.length > 0
-          ? `${queueList.length} Tracks Processed`
-          : "Queue Empty";
+  const isYtdlOnline = Boolean(ytdlRes?.data || ytdlContainer?.online);
 
-    telemetry.ytdl = {
-      label: "Lidarr YT Downloader",
-      detail: detailText,
-      status: "online",
-      priority: true,
-    };
-  } else {
-    const fallback = await checkDockerContainerStatus([
-      "lidarr-youtube-downloader",
-      "lidarr_youtube_downloader",
-      "lidarr-yt-downloader",
-      "angrido/lidarr-downloader",
-    ]);
+  telemetry.ytdl = {
+    label: "Lidarr YT Downloader",
+    detail: isYtdlOnline ? `${activeQueueCount} in Queue` : "Container Offline",
+    status: isYtdlOnline ? "online" : "offline",
+    priority: true,
+  };
 
-    telemetry.ytdl = {
-      label: "Lidarr YT Downloader",
-      detail: fallback?.online ? "Queue Empty" : "Container Offline",
-      status: fallback?.online ? "online" : "offline",
-      priority: true,
-    };
-  }
-
-  // 2. Frigate (With event relative timestamp)
+  // 2. Frigate
   if (frigateRes?.data) {
     const events = frigateRes.data;
     if (Array.isArray(events) && events.length > 0) {
@@ -213,15 +177,12 @@ export async function getServicesTelemetry() {
 
   // 3. Lidarr
   if (lidarrRes?.data) {
-    const queueData = lidarrRes.data;
-    const queueList = Array.isArray(queueData)
-      ? queueData
-      : queueData.records || [];
-    const count = queueList.length;
-
     telemetry.lidarr = {
       label: "Lidarr",
-      detail: count > 0 ? `${count} Queued Items` : "Container Active",
+      detail:
+        activeQueueCount > 0
+          ? `${activeQueueCount} Queued Items`
+          : "Container Active",
       status: "online",
     };
   } else {
@@ -229,7 +190,7 @@ export async function getServicesTelemetry() {
     telemetry.lidarr = {
       label: "Lidarr",
       detail: fallback?.online ? "Container Active" : "Offline",
-      status: fallback?.online ? "offline" : "offline",
+      status: fallback?.online ? "online" : "offline",
     };
   }
 
@@ -252,7 +213,7 @@ export async function getServicesTelemetry() {
     telemetry.qbittorrent = {
       label: "qBittorrent",
       detail: fallback?.online ? "Container Active" : "Offline",
-      status: fallback?.online ? "offline" : "offline",
+      status: fallback?.online ? "online" : "offline",
     };
   }
 
@@ -271,7 +232,7 @@ export async function getServicesTelemetry() {
     telemetry.homeassistant = {
       label: "Home Assistant",
       detail: fallback?.online ? "Container Active" : "Offline",
-      status: fallback?.online ? "offline" : "offline",
+      status: fallback?.online ? "online" : "offline",
     };
   }
 
@@ -292,7 +253,7 @@ export async function getServicesTelemetry() {
     telemetry.immich = {
       label: "Immich",
       detail: fallback?.online ? "Container Active" : "Offline",
-      status: fallback?.online ? "offline" : "offline",
+      status: fallback?.online ? "online" : "offline",
     };
   }
 
