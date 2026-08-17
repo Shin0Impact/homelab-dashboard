@@ -41,8 +41,8 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
     loading: true,
   })
 
-  // Hover state for storage breakdown tooltip
-  const [showStorageTooltip, setShowStorageTooltip] = useState(false)
+  // Hover state for in-card expanded view
+  const [isHoveredStorage, setIsHoveredStorage] = useState(false)
 
   // Subscribe to settings customization
   const isCompact = useCompactMode()
@@ -163,23 +163,25 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
       {/* 1. Stat Cards */}
       <div className={`grid grid-cols-2 lg:grid-cols-4 ${isCompact ? "gap-2" : "gap-3"}`}>
         {/* Total Containers */}
-        <div className={`rounded-xl transition-all ${isCompact ? "p-2.5" : "p-4"} ${glass}`}>
+        <div className={`flex flex-col justify-between rounded-xl transition-all ${isCompact ? "p-2.5 h-28" : "p-4 h-32"} ${glass}`}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">
               Total Containers
             </span>
-            <div className={`flex items-center justify-center rounded-lg bg-primary/15 text-primary ${isCompact ? "h-6 w-6" : "h-8 w-8"}`}>
+            <div className={`flex items-center justify-center rounded-lg bg-teal-500/15 text-teal-400 ${isCompact ? "h-6 w-6" : "h-8 w-8"}`}>
               <Boxes className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
             </div>
           </div>
-          <p className={`font-bold ${isCompact ? "mt-1 text-xl" : "mt-2 text-2xl"}`}>{totalContainers}</p>
-          <p className="text-[11px] text-muted-foreground">
-            Discovered via Socket
-          </p>
+          <div>
+            <p className={`font-bold ${isCompact ? "text-xl" : "text-2xl"}`}>{totalContainers}</p>
+            <p className="text-[11px] text-muted-foreground truncate">
+              Discovered via Socket
+            </p>
+          </div>
         </div>
 
         {/* Services Online */}
-        <div className={`rounded-xl transition-all ${isCompact ? "p-2.5" : "p-4"} ${glass}`}>
+        <div className={`flex flex-col justify-between rounded-xl transition-all ${isCompact ? "p-2.5 h-28" : "p-4 h-32"} ${glass}`}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">
               Services Online
@@ -188,17 +190,21 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
               <Activity className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
             </div>
           </div>
-          <p className={`font-bold ${isCompact ? "mt-1 text-xl" : "mt-2 text-2xl"}`}>{onlineCount}</p>
-          <p className="text-[11px] text-muted-foreground">
-            {offlineCount} offline
-          </p>
+          <div>
+            <p className={`font-bold ${isCompact ? "text-xl" : "text-2xl"}`}>{onlineCount}</p>
+            <p className="text-[11px] text-muted-foreground truncate">
+              {offlineCount} offline
+            </p>
+          </div>
         </div>
 
-        {/* Storage Multi-Drive Hover Card */}
+        {/* Storage Multi-Drive In-Card Expandable Card */}
         <div
-          className={`relative rounded-xl transition-all cursor-pointer ${isCompact ? "p-2.5" : "p-4"} ${glass}`}
-          onMouseEnter={() => setShowStorageTooltip(true)}
-          onMouseLeave={() => setShowStorageTooltip(false)}
+          className={`group flex flex-col justify-between rounded-xl transition-all duration-200 cursor-pointer ${
+            isCompact ? "p-2.5 h-28" : "p-4 h-32"
+          } ${glass} hover:border-amber-500/30`}
+          onMouseEnter={() => setIsHoveredStorage(true)}
+          onMouseLeave={() => setIsHoveredStorage(false)}
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">
@@ -208,59 +214,55 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
               <HardDrive className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
             </div>
           </div>
-          <p className={`font-bold ${isCompact ? "mt-1 text-xl" : "mt-2 text-2xl"}`}>
-            {storage.loading ? "Checking..." : storage.usedFormatted}
-          </p>
-          <p className="text-[11px] text-muted-foreground flex items-center justify-between">
-            <span>of {storage.totalFormatted} pool</span>
-            {storage.drives && storage.drives.length > 0 && (
-              <span className="text-[10px] text-amber-400/80 font-medium">(Hover for details)</span>
-            )}
-          </p>
 
-          {/* Hover Breakdown Popover */}
-          {showStorageTooltip && storage.drives && storage.drives.length > 0 && (
-            <div className="absolute left-0 top-full mt-2 w-72 sm:w-80 z-50 rounded-xl border border-white/10 bg-slate-900/95 p-3.5 shadow-2xl backdrop-blur-md">
-              <div className="mb-2 flex items-center justify-between border-b border-white/10 pb-1.5">
-                <span className="text-xs font-semibold text-foreground">
-                  Drive Breakdown ({storage.drives.length})
-                </span>
-                <span className="text-[11px] font-mono text-amber-400">
-                  {storage.percentage}% used
-                </span>
+          {!isHoveredStorage || !storage.drives || storage.drives.length === 0 ? (
+            /* Normal Default View */
+            <div>
+              <p className={`font-bold ${isCompact ? "text-xl" : "text-2xl"}`}>
+                {storage.loading ? "Checking..." : storage.usedFormatted}
+              </p>
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                <span className="truncate">of {storage.totalFormatted} pool</span>
+                {storage.drives && storage.drives.length > 0 && (
+                  <span className="text-[10px] text-amber-400/80 font-medium group-hover:text-amber-300">
+                    (Hover details)
+                  </span>
+                )}
               </div>
-              <div className="max-h-56 space-y-2.5 overflow-y-auto pr-1 text-xs [scrollbar-width:thin]">
-                {storage.drives.map((d, i) => (
-                  <div key={i} className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="truncate font-mono font-medium text-slate-200" title={d.mount}>
-                        {d.mount}
-                      </span>
-                      <span className="ml-2 shrink-0 font-mono text-[11px] text-muted-foreground">
-                        {d.usedFormatted} / {d.totalFormatted}
-                      </span>
-                    </div>
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
-                      <div
-                        className={`h-full transition-all duration-300 ${
-                          d.percentage > 85
-                            ? "bg-red-500"
-                            : d.percentage > 70
-                            ? "bg-amber-500"
-                            : "bg-emerald-500"
-                        }`}
-                        style={{ width: `${Math.min(100, Math.max(0, d.percentage))}%` }}
-                      />
-                    </div>
+            </div>
+          ) : (
+            /* In-Card Expanded Drive View on Hover */
+            <div className="my-auto space-y-1.5 overflow-y-auto pr-0.5 max-h-[4.5rem] [scrollbar-width:none]">
+              {storage.drives.map((d, i) => (
+                <div key={i} className="space-y-0.5">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="truncate font-mono font-medium text-foreground max-w-[100px]" title={d.mount}>
+                      {d.mount}
+                    </span>
+                    <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                      {d.usedFormatted} / {d.totalFormatted}
+                    </span>
                   </div>
-                ))}
-              </div>
+                  <div className="h-1 w-full overflow-hidden rounded-full bg-secondary/80">
+                    <div
+                      className={`h-full transition-all duration-300 ${
+                        d.percentage > 85
+                          ? "bg-red-500"
+                          : d.percentage > 70
+                          ? "bg-amber-500"
+                          : "bg-teal-400"
+                      }`}
+                      style={{ width: `${Math.min(100, Math.max(0, d.percentage))}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
 
-        {/* Tailscale Stat Card (Dynamic) */}
-        <div className={`rounded-xl transition-all ${isCompact ? "p-2.5" : "p-4"} ${glass}`}>
+        {/* Tailscale Stat Card */}
+        <div className={`flex flex-col justify-between rounded-xl transition-all ${isCompact ? "p-2.5 h-28" : "p-4 h-32"} ${glass}`}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">
               Tailscale
@@ -273,18 +275,20 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
               <Wifi className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
             </div>
           </div>
-          <p className={`font-bold ${isCompact ? "mt-1 text-lg" : "mt-2 text-xl"}`}>
-            {tailscale.loading 
-              ? "Checking..." 
-              : tailscale.connected 
-              ? "Connected" 
-              : "Disconnected"}
-          </p>
-          <p className="text-[11px] text-muted-foreground truncate">
-            {tailscale.connected 
-              ? `${tailscale.devicesCount} devices in tailnet` 
-              : "Mesh VPN offline"}
-          </p>
+          <div>
+            <p className={`font-bold ${isCompact ? "text-lg" : "text-xl"}`}>
+              {tailscale.loading 
+                ? "Checking..." 
+                : tailscale.connected 
+                ? "Connected" 
+                : "Disconnected"}
+            </p>
+            <p className="text-[11px] text-muted-foreground truncate">
+              {tailscale.connected 
+                ? `${tailscale.devicesCount} devices in tailnet` 
+                : "Mesh VPN offline"}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -312,7 +316,7 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
                 isCompact ? "px-2.5 py-0.5 text-[11px]" : "px-3 py-1 text-xs"
               } font-medium ${
                 filter === f
-                  ? "border-primary/40 bg-primary/20 text-primary"
+                  ? "border-teal-500/40 bg-teal-500/20 text-teal-400"
                   : "border-white/5 bg-secondary/30 text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -408,7 +412,7 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
                     href={computedUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className={`flex items-center gap-2 rounded-xl bg-primary/15 font-semibold text-primary transition-colors hover:bg-primary/25 ${
+                    className={`flex items-center gap-2 rounded-xl bg-teal-500/15 font-semibold text-teal-400 transition-colors hover:bg-teal-500/25 ${
                       isCompact ? "px-3 py-1.5 text-[11px]" : "px-4 py-2 text-xs"
                     }`}
                   >
