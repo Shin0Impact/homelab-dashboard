@@ -114,27 +114,15 @@ export default function App() {
     }
   }
 
-  const handleUpdateService = (updatedService) => {
-  setServices((prev) =>
-    prev.map((s) => (s.id === updatedService.id ? updatedService : s))
-  )
-  // If saving custom services to localStorage:
-  // localStorage.setItem("homelab_custom_services", JSON.stringify(updatedList))
+  const handleUpdateService = async (updatedService) => {
+    // 1. Immediate optimistic local update
+    setServices((prev) =>
+      prev.map((s) => (s.id === updatedService.id ? updatedService : s))
+    )
 
-
-  try {
-    const res = await fetch(`/api/services/${updatedService.id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        ...getAuthHeaders(),
-      },
-      body: JSON.stringify(updatedService),
-    })
-
-    // Fallback if your backend uses container paths
-    if (!res.ok) {
-      await fetch(`/api/containers/${updatedService.id}`, {
+    // 2. Persist to API
+    try {
+      const res = await fetch(`/api/services/${updatedService.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -142,14 +130,25 @@ export default function App() {
         },
         body: JSON.stringify(updatedService),
       })
-    }
 
-    fetchContainers()
-  } catch (err) {
-    console.error("Failed to update service:", err)
-    fetchContainers() // Revert to server state on error
+      // Fallback if backend uses container routes
+      if (!res.ok) {
+        await fetch(`/api/containers/${updatedService.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+          },
+          body: JSON.stringify(updatedService),
+        })
+      }
+
+      fetchContainers()
+    } catch (err) {
+      console.error("Failed to update service:", err)
+      fetchContainers() // Revert to server state on error
+    }
   }
-}
 
   const handleDeleteService = async (id) => {
     try {
