@@ -2,6 +2,7 @@ import express from "express";
 import os from "os";
 import { docker } from "../helpers/dockerUtils.js";
 import { execAsync, getStorageStats, getCpuUsage } from "../helpers/sysInfo.js";
+import { getServicesTelemetry } from "../helpers/serviceMonitors.js";
 
 const router = express.Router();
 
@@ -18,6 +19,22 @@ setInterval(() => {
     Math.min(100, Math.round((1 - idleDiff / (totalDiff || 1)) * 100)),
   );
 }, 2000);
+
+router.get("/services-telemetry", async (req, res) => {
+  try {
+    const servicesStats = await getServicesTelemetry();
+    res.json(servicesStats);
+  } catch (err) {
+    res.json({
+      frigate: { online: false },
+      qbittorrent: { online: false },
+      homeassistant: { online: false },
+      immich: { online: false },
+      lidarr: { online: false },
+      ytdl: { online: false },
+    });
+  }
+});
 
 router.get("/tailscale", async (req, res) => {
   try {

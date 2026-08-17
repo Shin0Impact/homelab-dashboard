@@ -126,7 +126,9 @@ export function StatCards({ isCompact, totalContainers, onlineCount, offlineCoun
             <div className="truncate">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Frigate</p>
               <p className="text-xs font-semibold truncate">
-                {servicesTelemetry.frigate?.online ? `${servicesTelemetry.frigate.label} (${servicesTelemetry.frigate.lastDetection})` : "Offline"}
+                {servicesTelemetry.frigate?.online 
+                  ? `${servicesTelemetry.frigate.label} (${servicesTelemetry.frigate.lastDetection})` 
+                  : "Offline"}
               </p>
             </div>
           </div>
@@ -137,7 +139,9 @@ export function StatCards({ isCompact, totalContainers, onlineCount, offlineCoun
             <div className="truncate">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">qBittorrent</p>
               <p className="text-xs font-semibold truncate">
-                {servicesTelemetry.qbittorrent?.online ? `${servicesTelemetry.qbittorrent.dlSpeedMB} MB/s` : "Offline"}
+                {servicesTelemetry.qbittorrent?.online 
+                  ? `${servicesTelemetry.qbittorrent.dlSpeedMB} MB/s` 
+                  : "Offline"}
               </p>
             </div>
           </div>
@@ -159,7 +163,9 @@ export function StatCards({ isCompact, totalContainers, onlineCount, offlineCoun
             <div className="truncate">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Immich</p>
               <p className="text-xs font-semibold truncate">
-                {servicesTelemetry.immich?.online ? `${servicesTelemetry.immich.photos} Photos` : "Offline"}
+                {servicesTelemetry.immich?.online 
+                  ? `${servicesTelemetry.immich.photos} Photos` 
+                  : "Offline"}
               </p>
             </div>
           </div>
@@ -170,7 +176,9 @@ export function StatCards({ isCompact, totalContainers, onlineCount, offlineCoun
             <div className="truncate">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Lidarr</p>
               <p className="text-xs font-semibold truncate">
-                {servicesTelemetry.lidarr?.online ? `${servicesTelemetry.lidarr.queuedCount} Queued` : "Offline"}
+                {servicesTelemetry.lidarr?.online 
+                  ? `${servicesTelemetry.lidarr.queuedCount} Queued` 
+                  : "Offline"}
               </p>
             </div>
           </div>
