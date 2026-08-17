@@ -24,7 +24,6 @@ export default function App() {
     return localStorage.getItem("homelab_authed") === "true"
   })
 
-  // Load user data stored on login
   const [user, setUser] = useState(() => {
     const stored = localStorage.getItem("homelab_user")
     return stored ? JSON.parse(stored) : null
@@ -33,6 +32,12 @@ export default function App() {
   const [page, setPage] = useState("dashboard")
   const [services, setServices] = useState([])
   const [categories, setCategories] = useState([])
+
+  // Store favorite service IDs in localStorage so polling doesn't overwrite them
+  const [favoriteIds, setFavoriteIds] = useState(() => {
+    const saved = localStorage.getItem("homelab_favorite_ids")
+    return saved ? JSON.parse(saved) : []
+  })
 
   const theme = useSelector((state) => state.settings?.theme || "default")
 
@@ -73,6 +78,21 @@ export default function App() {
     return () => clearInterval(interval)
   }, [authed, dispatch, getAuthHeaders])
 
+  // Helper to apply favorite status from localStorage onto raw API data
+  const applyFavorites = useCallback(
+    (rawServices) => {
+      return rawServices.map((s) => {
+        const isFav = favoriteIds.includes(s.id) || Boolean(s.is_favorite || s.favorite)
+        return {
+          ...s,
+          is_favorite: isFav,
+          favorite: isFav,
+        }
+      })
+    },
+    [favoriteIds]
+  )
+
   const fetchContainers = useCallback(async () => {
     try {
       const res = await fetch("/api/containers", {
@@ -80,16 +100,19 @@ export default function App() {
       })
       const data = await res.json()
 
+      let rawList = []
       if (Array.isArray(data)) {
-        setServices(data)
+        rawList = data
       } else {
-        setServices(data.services || [])
+        rawList = data.services || []
         setCategories(data.categories || [])
       }
+
+      setServices(applyFavorites(rawList))
     } catch (err) {
       console.error("Failed to load services:", err)
     }
-  }, [getAuthHeaders])
+  }, [getAuthHeaders, applyFavorites])
 
   useEffect(() => {
     if (!authed) return
@@ -115,12 +138,25 @@ export default function App() {
   }
 
   const handleUpdateService = async (updatedService) => {
-    // 1. Immediate optimistic local update
+    // Update local favorite ID list if toggled
+    const isFav = Boolean(updatedService.is_favorite || updatedService.favorite)
+    let updatedFavs = [...favoriteIds]
+
+    if (isFav && !updatedFavs.includes(updatedService.id)) {
+      updatedFavs.push(updatedService.id)
+    } else if (!isFav && updatedFavs.includes(updatedService.id)) {
+      updatedFavs = updatedFavs.filter((id) => id !== updatedService.id)
+    }
+
+    setFavoriteIds(updatedFavs)
+    localStorage.setItem("homelab_favorite_ids", JSON.stringify(updatedFavs))
+
+    // Optimistically update local services state
     setServices((prev) =>
-      prev.map((s) => (s.id === updatedService.id ? updatedService : s))
+      prev.map((s) => (s.id === updatedService.id ? { ...updatedService, is_favorite: isFav, favorite: isFav } : s))
     )
 
-    // 2. Persist to API
+    // Persist to backend API (best-effort)
     try {
       const res = await fetch(`/api/services/${updatedService.id}`, {
         method: "PUT",
@@ -131,7 +167,6 @@ export default function App() {
         body: JSON.stringify(updatedService),
       })
 
-      // Fallback if backend uses container routes
       if (!res.ok) {
         await fetch(`/api/containers/${updatedService.id}`, {
           method: "PUT",
@@ -142,11 +177,8 @@ export default function App() {
           body: JSON.stringify(updatedService),
         })
       }
-
-      fetchContainers()
     } catch (err) {
-      console.error("Failed to update service:", err)
-      fetchContainers() // Revert to server state on error
+      console.error("Failed to persist service update to backend:", err)
     }
   }
 
