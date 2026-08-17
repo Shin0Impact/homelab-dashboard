@@ -1,6 +1,17 @@
-import React, { useState } from "react"
-import { Activity, Boxes, HardDrive, Wifi, Camera, Download, Home, Image, Music, Video } from "lucide-react"
-import { glass } from "../UIHelpers"
+import React, { useState } from "react";
+import {
+  Activity,
+  Boxes,
+  HardDrive,
+  Wifi,
+  Camera,
+  Download,
+  Home,
+  Image,
+  Music,
+  Video,
+} from "lucide-react";
+import { glass } from "../UIHelpers";
 
 const SERVICE_ICONS = {
   frigate: { icon: Camera, color: "text-cyan-400" },
@@ -8,46 +19,88 @@ const SERVICE_ICONS = {
   homeassistant: { icon: Home, color: "text-amber-400" },
   immich: { icon: Image, color: "text-purple-400" },
   lidarr: { icon: Music, color: "text-emerald-400" },
-  ytdl: { icon: Video, color: "text-red-400" }
-}
+  ytdl: { icon: Video, color: "text-red-400" },
+};
 
-export function StatCards({ isCompact, totalContainers, onlineCount, offlineCount, storage, tailscale, servicesTelemetry }) {
-  const [isHoveredStorage, setIsHoveredStorage] = useState(false)
+export function StatCards({
+  isCompact,
+  totalContainers,
+  onlineCount,
+  offlineCount,
+  storage,
+  tailscale,
+  servicesTelemetry,
+}) {
+  const [isHoveredStorage, setIsHoveredStorage] = useState(false);
 
-  // Filter only active online services
-  const activeServices = servicesTelemetry 
-    ? Object.entries(servicesTelemetry).filter(([_, data]) => data && data.status === "online")
-    : []
+  // Filter only online services
+  const activeServices = servicesTelemetry
+    ? Object.entries(servicesTelemetry).filter(
+        ([_, data]) => data && data.status === "online"
+      )
+    : [];
 
   return (
     <div className="space-y-3">
       {/* Primary System Stat Cards */}
-      <div className={`grid grid-cols-2 lg:grid-cols-4 ${isCompact ? "gap-2" : "gap-3"}`}>
+      <div
+        className={`grid grid-cols-2 lg:grid-cols-4 ${
+          isCompact ? "gap-2" : "gap-3"
+        }`}
+      >
         {/* Total Containers */}
-        <div className={`flex flex-col justify-between rounded-xl transition-all ${isCompact ? "h-28 p-2.5" : "h-32 p-4"} ${glass}`}>
+        <div
+          className={`flex flex-col justify-between rounded-xl transition-all ${
+            isCompact ? "h-28 p-2.5" : "h-32 p-4"
+          } ${glass}`}
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Total Containers</span>
-            <div className={`flex items-center justify-center rounded-lg bg-teal-500/15 text-teal-400 ${isCompact ? "h-6 w-6" : "h-8 w-8"}`}>
+            <span className="text-xs font-medium text-muted-foreground">
+              Total Containers
+            </span>
+            <div
+              className={`flex items-center justify-center rounded-lg bg-teal-500/15 text-teal-400 ${
+                isCompact ? "h-6 w-6" : "h-8 w-8"
+              }`}
+            >
               <Boxes className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
             </div>
           </div>
           <div>
-            <p className={`font-bold ${isCompact ? "text-xl" : "text-2xl"}`}>{totalContainers}</p>
-            <p className="truncate text-[11px] text-muted-foreground">Discovered via Socket</p>
+            <p className={`font-bold ${isCompact ? "text-xl" : "text-2xl"}`}>
+              {totalContainers}
+            </p>
+            <p className="truncate text-[11px] text-muted-foreground">
+              Discovered via Socket
+            </p>
           </div>
         </div>
 
         {/* Services Online */}
-        <div className={`flex flex-col justify-between rounded-xl transition-all ${isCompact ? "h-28 p-2.5" : "h-32 p-4"} ${glass}`}>
+        <div
+          className={`flex flex-col justify-between rounded-xl transition-all ${
+            isCompact ? "h-28 p-2.5" : "h-32 p-4"
+          } ${glass}`}
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Services Online</span>
-            <div className={`flex items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400 ${isCompact ? "h-6 w-6" : "h-8 w-8"}`}>
+            <span className="text-xs font-medium text-muted-foreground">
+              Services Online
+            </span>
+            <div
+              className={`flex items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400 ${
+                isCompact ? "h-6 w-6" : "h-8 w-8"
+              }`}
+            >
               <Activity className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
             </div>
           </div>
           <div>
-            <p className={`font-bold ${isCompact ? "text-xl" : "text-2xl"}`}>{onlineCount}</p>
-            <p className="truncate text-[11px] text-muted-foreground">{offlineCount} offline</p>
+            <p className={`font-bold ${isCompact ? "text-xl" : "text-2xl"}`}>
+              {onlineCount}
+            </p>
+            <p className="truncate text-[11px] text-muted-foreground">
+              {offlineCount} offline
+            </p>
           </div>
         </div>
 
@@ -60,13 +113,21 @@ export function StatCards({ isCompact, totalContainers, onlineCount, offlineCoun
           onMouseLeave={() => setIsHoveredStorage(false)}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Storage</span>
-            <div className={`flex items-center justify-center rounded-lg bg-amber-500/15 text-amber-400 ${isCompact ? "h-6 w-6" : "h-8 w-8"}`}>
+            <span className="text-xs font-medium text-muted-foreground">
+              Storage
+            </span>
+            <div
+              className={`flex items-center justify-center rounded-lg bg-amber-500/15 text-amber-400 ${
+                isCompact ? "h-6 w-6" : "h-8 w-8"
+              }`}
+            >
               <HardDrive className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
             </div>
           </div>
 
-          {!isHoveredStorage || !storage.drives || storage.drives.length === 0 ? (
+          {!isHoveredStorage ||
+          !storage.drives ||
+          storage.drives.length === 0 ? (
             <div>
               <p className={`font-bold ${isCompact ? "text-xl" : "text-2xl"}`}>
                 {storage.loading ? "Checking..." : storage.usedFormatted}
@@ -85,7 +146,10 @@ export function StatCards({ isCompact, totalContainers, onlineCount, offlineCoun
               {storage.drives.map((d, i) => (
                 <div key={i} className="space-y-0.5">
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="max-w-[100px] truncate font-mono font-medium text-foreground" title={d.mount}>
+                    <span
+                      className="max-w-[100px] truncate font-mono font-medium text-foreground"
+                      title={d.mount}
+                    >
                       {d.mount}
                     </span>
                     <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
@@ -101,7 +165,9 @@ export function StatCards({ isCompact, totalContainers, onlineCount, offlineCoun
                           ? "bg-amber-500"
                           : "bg-teal-400"
                       }`}
-                      style={{ width: `${Math.min(100, Math.max(0, d.percentage))}%` }}
+                      style={{
+                        width: `${Math.min(100, Math.max(0, d.percentage))}%`,
+                      }}
                     />
                   </div>
                 </div>
@@ -111,41 +177,70 @@ export function StatCards({ isCompact, totalContainers, onlineCount, offlineCoun
         </div>
 
         {/* Tailscale */}
-        <div className={`flex flex-col justify-between rounded-xl transition-all ${isCompact ? "h-28 p-2.5" : "h-32 p-4"} ${glass}`}>
+        <div
+          className={`flex flex-col justify-between rounded-xl transition-all ${
+            isCompact ? "h-28 p-2.5" : "h-32 p-4"
+          } ${glass}`}
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Tailscale</span>
-            <div className={`flex items-center justify-center rounded-lg ${
-              tailscale.connected ? "bg-purple-500/15 text-purple-400" : "bg-red-500/15 text-red-400"
-            } ${isCompact ? "h-6 w-6" : "h-8 w-8"}`}>
+            <span className="text-xs font-medium text-muted-foreground">
+              Tailscale
+            </span>
+            <div
+              className={`flex items-center justify-center rounded-lg ${
+                tailscale.connected
+                  ? "bg-purple-500/15 text-purple-400"
+                  : "bg-red-500/15 text-red-400"
+              } ${isCompact ? "h-6 w-6" : "h-8 w-8"}`}
+            >
               <Wifi className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
             </div>
           </div>
           <div>
             <p className={`font-bold ${isCompact ? "text-lg" : "text-xl"}`}>
-              {tailscale.loading ? "Checking..." : tailscale.connected ? "Connected" : "Disconnected"}
+              {tailscale.loading
+                ? "Checking..."
+                : tailscale.connected
+                ? "Connected"
+                : "Disconnected"}
             </p>
             <p className="truncate text-[11px] text-muted-foreground">
-              {tailscale.connected ? `${tailscale.devicesCount} devices in tailnet` : "Mesh VPN offline"}
+              {tailscale.connected
+                ? `${tailscale.devicesCount} devices in tailnet`
+                : "Mesh VPN offline"}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Dynamic Service Telemetry Mini-Row (Only Renders Online Services) */}
+      {/* Dynamic Service Telemetry Grid: Expands smoothly across available space */}
       {activeServices.length > 0 && (
-        <div className="grid grid-cols-2 min-[480px]:grid-cols-3 lg:grid-cols-6 gap-2">
+        <div className="flex flex-wrap gap-2.5 pt-1">
           {activeServices.map(([key, data]) => {
-            const serviceConfig = SERVICE_ICONS[key] || { icon: Activity, color: "text-teal-400" };
+            const serviceConfig = SERVICE_ICONS[key] || {
+              icon: Activity,
+              color: "text-teal-400",
+            };
             const IconComponent = serviceConfig.icon;
 
             return (
-              <div key={key} className={`flex items-center gap-2.5 rounded-xl p-2.5 ${glass}`}>
-                <IconComponent className={`h-4 w-4 shrink-0 ${serviceConfig.color}`} />
-                <div className="truncate">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
+              <div
+                key={key}
+                className={`flex min-w-[220px] flex-1 items-center gap-3 rounded-xl p-3 ${glass}`}
+              >
+                <div
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary/50 ${serviceConfig.color}`}
+                >
+                  <IconComponent className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                     {data.label}
                   </p>
-                  <p className="text-xs font-semibold truncate" title={data.detail}>
+                  <p
+                    className="text-xs font-semibold text-foreground break-words leading-tight"
+                    title={data.detail}
+                  >
                     {data.detail}
                   </p>
                 </div>
@@ -155,5 +250,5 @@ export function StatCards({ isCompact, totalContainers, onlineCount, offlineCoun
         </div>
       )}
     </div>
-  )
+  );
 }

@@ -1,6 +1,6 @@
-const FETCH_TIMEOUT_MS = 2500;
+const FETCH_TIMEOUT_MS = 3000;
 
-// Host fallback candidates depending on the environment
+// Host candidates to reach services across host, container bridge, LAN, or Tailscale
 const FALLBACK_HOSTS = [
   "127.0.0.1",
   "localhost",
@@ -11,17 +11,18 @@ const FALLBACK_HOSTS = [
 ].filter(Boolean);
 
 /**
- * Tries contacting a service across multiple dynamic host configurations.
+ * Attempts fetching an API endpoint across multiple container and host URL combinations.
  */
-async function fetchServiceEndpoint(containerName, port, path, options = {}) {
-  // Construct all possible URL permutations dynamically
+async function fetchServiceEndpoint(
+  containerName,
+  defaultPort,
+  path,
+  options = {},
+) {
   const candidateUrls = [
-    // Custom ENV override if provided
     process.env[`${containerName.toUpperCase().replace(/-/g, "_")}_URL`],
-    // Internal Docker network DNS
-    `http://${containerName}:${port}${path}`,
-    // Fallback host IPs (Localhost, Docker Gateway, Tailscale IP, LAN IP)
-    ...FALLBACK_HOSTS.map((host) => `http://${host}:${port}${path}`),
+    `http://${containerName}:${defaultPort}${path}`,
+    ...FALLBACK_HOSTS.map((host) => `http://${host}:${defaultPort}${path}`),
   ].filter(Boolean);
 
   for (const url of candidateUrls) {
@@ -52,40 +53,66 @@ function formatBytes(bytes) {
 export async function getServicesTelemetry() {
   const [frigateRes, qbitRes, haRes, immichRes, lidarrRes, ytdlRes] =
     await Promise.all([
-      // Frigate
+      // 1. Frigate
       fetchServiceEndpoint("frigate", 5000, "/api/events?limit=1"),
 
-      // qBittorrent
-      fetchServiceEndpoint("qbittorrent", 8080, "/api/v2/transfer/info"),
+      // 2. qBittorrent (Transfer info or Maindata fallback)
+      fetchServiceEndpoint("qbittorrent", 8080, "/api/v2/transfer/info").then(
+        async (res) => {
+          if (res) return res;
+          return fetchServiceEndpoint(
+            "qbittorrent",
+            8080,
+            "/api/v2/sync/maindata",
+          );
+        },
+      ),
 
-      // Home Assistant
+      // 3. Home Assistant
       fetchServiceEndpoint("homeassistant", 8123, "/api/states", {
         headers: process.env.HA_TOKEN
           ? { Authorization: `Bearer ${process.env.HA_TOKEN}` }
           : {},
       }),
 
-      // Immich
+      // 4. Immich (Tries server-info/stats then server/statistics fallback)
       fetchServiceEndpoint("immich-server", 2283, "/api/server-info/stats", {
         headers: process.env.IMMICH_API_KEY
           ? { "x-api-key": process.env.IMMICH_API_KEY }
           : {},
+      }).then(async (res) => {
+        if (res) return res;
+        return fetchServiceEndpoint(
+          "immich-server",
+          2283,
+          "/api/server/statistics",
+          {
+            headers: process.env.IMMICH_API_KEY
+              ? { "x-api-key": process.env.IMMICH_API_KEY }
+              : {},
+          },
+        );
       }),
 
-      // Lidarr
+      // 5. Lidarr Queue
       fetchServiceEndpoint("lidarr", 8686, "/api/v1/queue", {
         headers: process.env.LIDARR_API_KEY
           ? { "X-Api-Key": process.env.LIDARR_API_KEY }
           : {},
       }),
 
-      // YTDL / TubeSync
-      fetchServiceEndpoint("youtube-dl", 8081, "/api/history"),
+      // 6. YTDL / TubeSync
+      fetchServiceEndpoint("youtube-dl", 8081, "/api/history").then(
+        async (res) => {
+          if (res) return res;
+          return fetchServiceEndpoint("ytdl", 8081, "/api/downloads");
+        },
+      ),
     ]);
 
   const telemetry = {};
 
-  // 1. Frigate Telemetry
+  // Parse Frigate
   if (frigateRes?.data) {
     const events = frigateRes.data;
     if (Array.isArray(events) && events.length > 0) {
@@ -105,20 +132,28 @@ export async function getServicesTelemetry() {
     } else {
       telemetry.frigate = {
         label: "Frigate",
-        detail: "No Recent Events",
+        detail: "No Motion Events",
         status: "online",
       };
     }
   }
 
-  // 2. qBittorrent Telemetry
+  // Parse qBittorrent
   if (qbitRes?.data) {
-    const qbit = qbitRes.data;
-    const dlSpeed = ((qbit.dl_info_speed || 0) / (1024 * 1024)).toFixed(1);
-    const ulSpeed = ((qbit.up_info_speed || 0) / (1024 * 1024)).toFixed(1);
+    const data = qbitRes.data;
+    const serverState = data.server_state || data;
+    const dlSpeed = ((serverState.dl_info_speed || 0) / (1024 * 1024)).toFixed(
+      1,
+    );
+    const ulSpeed = ((serverState.up_info_speed || 0) / (1024 * 1024)).toFixed(
+      1,
+    );
 
     let detail = "Idle";
-    if (qbit.dl_info_speed > 0 || qbit.up_info_speed > 0) {
+    if (
+      (serverState.dl_info_speed || 0) > 0 ||
+      (serverState.up_info_speed || 0) > 0
+    ) {
       detail = `↓ ${dlSpeed} MB/s  ↑ ${ulSpeed} MB/s`;
     }
 
@@ -129,33 +164,33 @@ export async function getServicesTelemetry() {
     };
   }
 
-  // 3. Home Assistant Telemetry
+  // Parse Home Assistant
   if (haRes?.data) {
     const states = haRes.data;
     if (Array.isArray(states)) {
-      const activeEntities = states.filter(
+      const active = states.filter(
         (e) => e.state !== "unavailable" && e.state !== "unknown",
       ).length;
       telemetry.homeassistant = {
         label: "Home Assistant",
-        detail: `${activeEntities} Active Entities`,
+        detail: `${active} Active Entities`,
         status: "online",
       };
     } else {
       telemetry.homeassistant = {
         label: "Home Assistant",
-        detail: "Connected",
+        detail: "System Connected",
         status: "online",
       };
     }
   }
 
-  // 4. Immich Telemetry
+  // Parse Immich
   if (immichRes?.data) {
     const stats = immichRes.data;
-    const photos = stats.photos || 0;
-    const videos = stats.videos || 0;
-    const usage = formatBytes(stats.usage || 0);
+    const photos = stats.photos || stats.photosCount || 0;
+    const videos = stats.videos || stats.videosCount || 0;
+    const usage = formatBytes(stats.usage || stats.usageBytes || 0);
 
     telemetry.immich = {
       label: "Immich",
@@ -164,7 +199,7 @@ export async function getServicesTelemetry() {
     };
   }
 
-  // 5. Lidarr Telemetry
+  // Parse Lidarr
   if (lidarrRes?.data) {
     const queueData = lidarrRes.data;
     const queueList = Array.isArray(queueData)
@@ -185,15 +220,15 @@ export async function getServicesTelemetry() {
     };
   }
 
-  // 6. YTDL Telemetry
+  // Parse YTDL
   if (ytdlRes?.data) {
     const historyData = ytdlRes.data;
     const historyList = Array.isArray(historyData)
       ? historyData
-      : historyData.data || [];
+      : historyData.data || historyData.items || [];
     telemetry.ytdl = {
       label: "YTDL",
-      detail: `${historyList.length} Downloaded Items`,
+      detail: `${historyList.length} Downloads Completed`,
       status: "online",
     };
   }
