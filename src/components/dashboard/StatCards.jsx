@@ -1,5 +1,6 @@
-import React, { useState } from "react";
-import { useSelector } from "react-redux";
+import React, { useEffect, useState } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import { setServicesTelemetry } from "../../store/telemetrySlice";
 import {
   Activity,
   Boxes,
@@ -23,6 +24,20 @@ const SERVICE_ICONS = {
   immich: { icon: Image, color: "text-purple-400" },
 };
 
+const DEFAULT_SERVICES = {
+  ytdl: {
+    label: "Lidarr YT Downloader",
+    detail: "Fetching Queue...",
+    status: "online",
+    priority: true,
+  },
+  frigate: {
+    label: "Frigate",
+    detail: "Monitoring...",
+    status: "online",
+  },
+};
+
 export function StatCards({
   isCompact,
   totalContainers,
@@ -31,20 +46,44 @@ export function StatCards({
   storage,
   tailscale,
 }) {
+  const dispatch = useDispatch();
   const [isHoveredStorage, setIsHoveredStorage] = useState(false);
 
-  // Retrieve cached services telemetry directly from Redux store for instant render
-  const servicesTelemetry = useSelector((state) => state.telemetry.servicesTelemetry);
+  // Redux state selector
+  const storeTelemetry = useSelector((state) => state.telemetry.servicesTelemetry);
 
-  const activeServices = servicesTelemetry
-    ? Object.entries(servicesTelemetry)
-        .filter(([_, data]) => data && (data.status === "online" || data.priority))
-        .sort(([keyA, dataA], [keyB, dataB]) => {
-          if (dataA.priority || keyA === "ytdl") return -1;
-          if (dataB.priority || keyB === "ytdl") return 1;
-          return 0;
-        })
-    : [];
+  // Merge default structures with incoming telemetry
+  const servicesTelemetry = {
+    ...DEFAULT_SERVICES,
+    ...storeTelemetry,
+  };
+
+  // Poll service telemetry endpoint every 5s
+  useEffect(() => {
+    const fetchServices = async () => {
+      try {
+        const res = await fetch("/api/services-telemetry");
+        if (res.ok) {
+          const data = await res.json();
+          dispatch(setServicesTelemetry(data));
+        }
+      } catch {
+        // Silently retain cached telemetry on fetch failure
+      }
+    };
+
+    fetchServices();
+    const interval = setInterval(fetchServices, 5000);
+    return () => clearInterval(interval);
+  }, [dispatch]);
+
+  const activeServices = Object.entries(servicesTelemetry)
+    .filter(([_, data]) => data && (data.status === "online" || data.priority))
+    .sort(([keyA, dataA], [keyB, dataB]) => {
+      if (dataA.priority || keyA === "ytdl") return -1;
+      if (dataB.priority || keyB === "ytdl") return 1;
+      return 0;
+    });
 
   return (
     <div className="space-y-3">

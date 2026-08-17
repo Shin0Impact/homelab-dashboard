@@ -14,14 +14,7 @@ const loadCachedTelemetry = () => {
         ],
         totalRam: parsed.totalRam || "0",
         processes: parsed.processes || [],
-        servicesTelemetry: parsed.servicesTelemetry || {
-          ytdl: {
-            label: "Lidarr YT Downloader",
-            detail: "0 in Queue",
-            status: "online",
-            priority: true,
-          },
-        },
+        servicesTelemetry: parsed.servicesTelemetry || {},
         errorMsg: null,
       };
     }
@@ -37,14 +30,7 @@ const loadCachedTelemetry = () => {
     ],
     totalRam: "0",
     processes: [],
-    servicesTelemetry: {
-      ytdl: {
-        label: "Lidarr YT Downloader",
-        detail: "0 in Queue",
-        status: "online",
-        priority: true,
-      },
-    },
+    servicesTelemetry: {},
     errorMsg: null,
   };
 };
@@ -91,11 +77,11 @@ const telemetrySlice = createSlice({
         state.processes = data.processes;
       }
 
+      // Sync servicesTelemetry when received via general telemetry payload
       if (data.servicesTelemetry) {
         state.servicesTelemetry = data.servicesTelemetry;
       }
 
-      // Persist latest state including servicesTelemetry to localStorage
       localStorage.setItem(
         "homelab_telemetry_cache",
         JSON.stringify({
@@ -109,7 +95,7 @@ const telemetrySlice = createSlice({
       );
     },
     setServicesTelemetry: (state, action) => {
-      state.servicesTelemetry = action.payload;
+      state.servicesTelemetry = action.payload || {};
       const cached = JSON.parse(
         localStorage.getItem("homelab_telemetry_cache") || "{}",
       );
