@@ -16,17 +16,15 @@ export function AppearanceSettings() {
   const dispatch = useDispatch()
   const { theme = "default", refresh = 15 } = useSelector((state) => state.settings)
 
-  // Calculate equivalent milliseconds for display
   const currentFps = Number(refresh)
   const currentMs = Math.round(1000 / (currentFps || 15))
 
   return (
     <div className={`rounded-2xl p-6 ${glass}`}>
       <h2 className="text-base font-semibold">Appearance</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Customize dashboard UI behavior.</p>
+      <p className="mt-1 text-sm text-muted-foreground">Customize UI themes and telemetry stream rate.</p>
 
       <div className="mt-5 space-y-5">
-        {/* Theme Selection */}
         <div>
           <p className="text-sm font-medium">Theme Mode</p>
           <p className="mb-2.5 text-xs text-muted-foreground">Select active color scheme.</p>
@@ -53,12 +51,11 @@ export function AppearanceSettings() {
           </div>
         </div>
 
-        {/* Polling Rate Slider (0.2 FPS to 60 FPS / 5000ms to 16ms) */}
         <div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">Refresh Rate</p>
-              <p className="text-xs text-muted-foreground">0.2 FPS (5s) to 60 FPS (~16ms)</p>
+              <p className="text-sm font-medium">Metrics Telemetry Refresh Rate</p>
+              <p className="text-xs text-muted-foreground">Applies strictly to CPU/RAM/Host live graphs</p>
             </div>
             <div className="text-right">
               <span className="font-mono text-sm font-semibold text-primary">{currentFps} FPS</span>
@@ -76,7 +73,6 @@ export function AppearanceSettings() {
             className="mt-3 w-full cursor-pointer accent-[var(--primary)]"
           />
 
-          {/* Quick Preset Buttons */}
           <div className="mt-2.5 flex items-center justify-between gap-1.5">
             {[
               { label: "1/5 FPS (5s)", fps: 0.2 },

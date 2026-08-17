@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useMemo } from "react"
 import { useDispatch, useSelector } from "react-redux"
 import { updateTelemetryData, setTelemetryError } from "./store/telemetrySlice"
 import { Dashboard } from "./components/Dashboard"
@@ -33,22 +33,19 @@ export default function App() {
   const [services, setServices] = useState([])
   const [categories, setCategories] = useState([])
 
-  // Calculate refresh rate in ms (Default: 15 FPS ≈ 66.67 ms, Range: 60 FPS [16.67ms] to 0.2 FPS [5000ms])
+  // Telemetry-only refresh rate calculation (Default: 15 FPS)
   const refreshSetting = useSelector((state) => state.settings?.refresh) || 
     Number(localStorage.getItem("homelab_refresh")) || 15
 
-  const refreshMs = React.useMemo(() => {
+  const telemetryRefreshMs = useMemo(() => {
     let ms = 1000 / 15 // Default 15 FPS (~66.67 ms)
 
     if (refreshSetting <= 60 && refreshSetting >= 0.2) {
-      // Input is passed as FPS (0.2 FPS to 60 FPS)
       ms = 1000 / refreshSetting
     } else if (refreshSetting >= 16 && refreshSetting <= 5000) {
-      // Input is passed as raw Milliseconds (16ms to 5000ms)
       ms = refreshSetting
     }
 
-    // Clamp between ~16.67ms (60 FPS) and 5000ms (1/5 FPS)
     return Math.min(Math.max(Math.round(ms), 16), 5000)
   }, [refreshSetting])
 
@@ -76,7 +73,7 @@ export default function App() {
     return token ? { Authorization: `Bearer ${token}` } : {}
   }, [])
 
-  // Telemetry Polling Effect using sub-second ms refresh interval
+  // Telemetry Polling (High-frequency rate strictly for real-time metrics)
   useEffect(() => {
     if (!authed) return
 
@@ -94,9 +91,9 @@ export default function App() {
     }
 
     fetchTelemetry()
-    const interval = setInterval(fetchTelemetry, refreshMs)
+    const interval = setInterval(fetchTelemetry, telemetryRefreshMs)
     return () => clearInterval(interval)
-  }, [authed, dispatch, getAuthHeaders, refreshMs])
+  }, [authed, dispatch, getAuthHeaders, telemetryRefreshMs])
 
   // Helper to apply favorite status from localStorage onto raw API data
   const applyFavorites = useCallback(
@@ -134,13 +131,13 @@ export default function App() {
     }
   }, [getAuthHeaders, applyFavorites])
 
-  // Container Polling Effect using sub-second ms refresh interval
+  // Container Polling (Fixed lightweight 5-second interval to prevent lag)
   useEffect(() => {
     if (!authed) return
     fetchContainers()
-    const interval = setInterval(fetchContainers, refreshMs)
+    const interval = setInterval(fetchContainers, 5000)
     return () => clearInterval(interval)
-  }, [authed, fetchContainers, refreshMs])
+  }, [authed, fetchContainers])
 
   const handleAddService = async (newService) => {
     try {
@@ -159,7 +156,6 @@ export default function App() {
   }
 
   const handleUpdateService = async (updatedService) => {
-    // Update local favorite ID list if toggled
     const isFav = Boolean(updatedService.is_favorite || updatedService.favorite)
     let updatedFavs = [...favoriteIds]
 
@@ -172,12 +168,10 @@ export default function App() {
     setFavoriteIds(updatedFavs)
     localStorage.setItem("homelab_favorite_ids", JSON.stringify(updatedFavs))
 
-    // Optimistically update local services state
     setServices((prev) =>
       prev.map((s) => (s.id === updatedService.id ? { ...updatedService, is_favorite: isFav, favorite: isFav } : s))
     )
 
-    // Persist to backend API (best-effort)
     try {
       const res = await fetch(`/api/services/${updatedService.id}`, {
         method: "PUT",
@@ -275,7 +269,7 @@ export default function App() {
               onRefresh={fetchContainers}
             />
           )}
-          {page === "metrics" && <Metrics />}
+          {page === "metrics" && <Metrics refreshMs={telemetryRefreshMs} />}
           {page === "settings" && <Settings />}
         </div>
       </main>
