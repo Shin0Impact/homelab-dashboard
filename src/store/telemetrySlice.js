@@ -14,6 +14,14 @@ const loadCachedTelemetry = () => {
         ],
         totalRam: parsed.totalRam || "0",
         processes: parsed.processes || [],
+        servicesTelemetry: parsed.servicesTelemetry || {
+          ytdl: {
+            label: "Lidarr YT Downloader",
+            detail: "0 in Queue",
+            status: "online",
+            priority: true,
+          },
+        },
         errorMsg: null,
       };
     }
@@ -29,6 +37,14 @@ const loadCachedTelemetry = () => {
     ],
     totalRam: "0",
     processes: [],
+    servicesTelemetry: {
+      ytdl: {
+        label: "Lidarr YT Downloader",
+        detail: "0 in Queue",
+        status: "online",
+        priority: true,
+      },
+    },
     errorMsg: null,
   };
 };
@@ -75,7 +91,11 @@ const telemetrySlice = createSlice({
         state.processes = data.processes;
       }
 
-      // Persist latest state to survive page refresh
+      if (data.servicesTelemetry) {
+        state.servicesTelemetry = data.servicesTelemetry;
+      }
+
+      // Persist latest state including servicesTelemetry to localStorage
       localStorage.setItem(
         "homelab_telemetry_cache",
         JSON.stringify({
@@ -84,6 +104,20 @@ const telemetrySlice = createSlice({
           ramData: state.ramData,
           totalRam: state.totalRam,
           processes: state.processes,
+          servicesTelemetry: state.servicesTelemetry,
+        }),
+      );
+    },
+    setServicesTelemetry: (state, action) => {
+      state.servicesTelemetry = action.payload;
+      const cached = JSON.parse(
+        localStorage.getItem("homelab_telemetry_cache") || "{}",
+      );
+      localStorage.setItem(
+        "homelab_telemetry_cache",
+        JSON.stringify({
+          ...cached,
+          servicesTelemetry: state.servicesTelemetry,
         }),
       );
     },
@@ -93,6 +127,6 @@ const telemetrySlice = createSlice({
   },
 });
 
-export const { updateTelemetryData, setTelemetryError } =
+export const { updateTelemetryData, setServicesTelemetry, setTelemetryError } =
   telemetrySlice.actions;
 export default telemetrySlice.reducer;
