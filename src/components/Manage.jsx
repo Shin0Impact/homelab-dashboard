@@ -1,8 +1,31 @@
 import React, { useState, useEffect } from "react"
-import { Container, Eye, EyeOff, Pencil, Plus, Search, Trash2, X } from "lucide-react"
+import {
+  Container,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  X,
+  Star,
+  Square,
+  Play,
+  RotateCw,
+  Loader2,
+} from "lucide-react"
 import { ICONS, CategoryTag, ServiceIcon, StatusDot, glass } from "./UIHelpers"
 
-const ICON_OPTIONS = ["container", "image", "cctv", "shield", "workflow", "bot", "music", "search", "download", "video"]
+const ICON_OPTIONS = [
+  "container",
+  "image",
+  "cctv",
+  "shield",
+  "workflow",
+  "bot",
+  "music",
+  "search",
+  "download",
+  "video",
+]
 const DEFAULT_CATEGORIES = ["AI", "Media", "Infra", "Network", "Automation"]
 
 function Field({ label, children }) {
@@ -20,7 +43,6 @@ function ServiceModal({ initial, onClose, onSave }) {
   const [category, setCategory] = useState(initial?.category ?? "Infra")
   const [icon, setIcon] = useState(initial?.icon ?? "container")
 
-  // Sync category options with LocalStorage and Settings events
   const [categories, setCategories] = useState(() => {
     const saved = localStorage.getItem("homelab_categories")
     return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES
@@ -45,7 +67,7 @@ function ServiceModal({ initial, onClose, onSave }) {
       category,
       icon,
       online: initial?.online ?? true,
-      hidden: initial?.hidden ?? false,
+      is_favorite: initial?.is_favorite ?? false,
       isCustom: true,
     })
   }
@@ -56,7 +78,10 @@ function ServiceModal({ initial, onClose, onSave }) {
       <div className={`relative w-full max-w-md rounded-2xl p-5 sm:p-6 ${glass}`}>
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">{initial ? "Edit Service" : "Add New Service"}</h2>
-          <button onClick={onClose} className="rounded-lg p-1 text-muted-foreground hover:bg-secondary/60 hover:text-foreground">
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1 text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -135,10 +160,21 @@ function ServiceModal({ initial, onClose, onSave }) {
   )
 }
 
-export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
+export function Manage({
+  services = [],
+  categories = [],
+  onAdd,
+  onUpdate,
+  onDelete,
+  onRefresh,
+}) {
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [searchTerm, setSearchTerm] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState("All")
+  const [actionLoadingMap, setActionLoadingMap] = useState({})
+
+  const checkIsOnline = (s) => s.online || s.status === "online" || s.state === "running"
 
   function openAdd() {
     setEditing(null)
@@ -154,26 +190,46 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
     setModalOpen(false)
   }
 
-  function handleToggleHide(s) {
+  function handleToggleFavorite(s) {
     if (onUpdate) {
-      onUpdate({ ...s, hidden: !s.hidden })
+      onUpdate({ ...s, is_favorite: !s.is_favorite })
     }
   }
 
-  // Filter services dynamically by name, port, or category
+  const handleContainerAction = async (service, action) => {
+    setActionLoadingMap((prev) => ({ ...prev, [`${service.id}-${action}`]: true }))
+    try {
+      const res = await fetch(`/api/containers/${service.id}/${action}`, { method: "POST" })
+      if (res.ok && onRefresh) {
+        await onRefresh()
+      }
+    } catch (err) {
+      console.error(`Failed to ${action} container:`, err)
+    } finally {
+      setActionLoadingMap((prev) => ({ ...prev, [`${service.id}-${action}`]: false }))
+    }
+  }
+
+  const filterOptions = [
+    "All",
+    ...new Set([...categories, ...services.map((s) => s.category).filter(Boolean)]),
+  ]
+
   const filteredServices = services.filter((s) => {
     const q = searchTerm.toLowerCase()
-    return (
+    const matchesSearch =
       s.name?.toLowerCase().includes(q) ||
       s.category?.toLowerCase().includes(q) ||
       s.port?.toString().includes(q) ||
       s.url?.toLowerCase().includes(q)
-    )
+
+    const matchesCat = selectedCategory === "All" || s.category === selectedCategory
+    return matchesSearch && matchesCat
   })
 
   return (
     <div className="space-y-6 p-4 sm:p-6 md:p-8">
-      {/* Search & Header Control Bar */}
+      {/* Top Controls Bar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -201,6 +257,23 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
         </div>
       </div>
 
+      {/* Category Pills Bar */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+        {filterOptions.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => setSelectedCategory(cat)}
+            className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              selectedCategory === cat
+                ? "border-teal-500/40 bg-teal-500/20 text-teal-400"
+                : "border-white/5 bg-secondary/30 text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
       {/* Desktop Table View */}
       <div className={`hidden overflow-hidden rounded-2xl md:block ${glass}`}>
         <table className="w-full text-sm">
@@ -210,18 +283,23 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
               <th className="px-5 py-3 font-medium">Local URL / Port</th>
               <th className="px-5 py-3 font-medium">Category</th>
               <th className="px-5 py-3 font-medium">Status</th>
-              <th className="px-5 py-3 font-medium">Visibility</th>
+              <th className="px-5 py-3 font-medium">Control</th>
               <th className="px-5 py-3 text-right font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
             {filteredServices.map((s) => {
+              const isOnline = checkIsOnline(s)
               const computedUrl = s.port
                 ? `${window.location.protocol}//${window.location.hostname}:${s.port}`
                 : s.url || "No exposed port"
 
+              const isStartLoading = !!actionLoadingMap[`${s.id}-start`]
+              const isStopLoading = !!actionLoadingMap[`${s.id}-stop`]
+              const isRestartLoading = !!actionLoadingMap[`${s.id}-restart`]
+
               return (
-                <tr key={s.id} className={`border-b border-white/5 last:border-0 hover:bg-secondary/30 ${s.hidden ? "opacity-60" : ""}`}>
+                <tr key={s.id} className="border-b border-white/5 last:border-0 hover:bg-secondary/30">
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-3">
                       <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary/70 ring-1 ring-white/5">
@@ -236,27 +314,65 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
-                      <StatusDot online={s.online} />
-                      <span className="text-xs text-muted-foreground">{s.online ? "Online" : "Offline"}</span>
+                      <StatusDot online={isOnline} />
+                      <span className="text-xs text-muted-foreground">{isOnline ? "Running" : "Exited"}</span>
                     </div>
                   </td>
                   <td className="px-5 py-3">
-                    <span className={`text-xs font-medium ${s.hidden ? "text-amber-400/80" : "text-muted-foreground"}`}>
-                      {s.hidden ? "Hidden" : "Visible"}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {isOnline ? (
+                        <button
+                          onClick={() => handleContainerAction(s, "stop")}
+                          disabled={isStopLoading}
+                          title="Stop Container"
+                          className="flex h-7 w-7 items-center justify-center rounded-md bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 disabled:opacity-50"
+                        >
+                          {isStopLoading ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Square className="h-3.5 w-3.5 fill-current" />
+                          )}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleContainerAction(s, "start")}
+                          disabled={isStartLoading}
+                          title="Start Container"
+                          className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50"
+                        >
+                          {isStartLoading ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Play className="h-3.5 w-3.5 fill-current" />
+                          )}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleContainerAction(s, "restart")}
+                        disabled={isRestartLoading}
+                        title="Restart Container"
+                        className="flex h-7 w-7 items-center justify-center rounded-md bg-secondary/60 text-muted-foreground hover:text-foreground disabled:opacity-50"
+                      >
+                        {isRestartLoading ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <RotateCw className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    </div>
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-1.5">
                       <button
-                        onClick={() => handleToggleHide(s)}
-                        title={s.hidden ? "Show in Dashboard" : "Hide from Dashboard"}
+                        onClick={() => handleToggleFavorite(s)}
+                        title={s.is_favorite ? "Remove from Favorites" : "Add to Favorites"}
                         className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
-                          s.hidden
-                            ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
+                          s.is_favorite
+                            ? "text-amber-400 hover:bg-amber-500/10"
                             : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
                         }`}
                       >
-                        {s.hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        <Star className={`h-4 w-4 ${s.is_favorite ? "fill-amber-400" : ""}`} />
                       </button>
                       <button
                         onClick={() => openEdit(s)}
@@ -286,15 +402,16 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
         </table>
       </div>
 
-      {/* Mobile Stacked Card View */}
+      {/* Mobile View */}
       <div className="space-y-3 md:hidden">
         {filteredServices.map((s) => {
+          const isOnline = checkIsOnline(s)
           const computedUrl = s.port
             ? `${window.location.protocol}//${window.location.hostname}:${s.port}`
             : s.url || "No exposed port"
 
           return (
-            <div key={s.id} className={`rounded-xl p-4 ${glass} ${s.hidden ? "opacity-60" : ""}`}>
+            <div key={s.id} className={`rounded-xl p-4 ${glass}`}>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
                   <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/70 ring-1 ring-white/5">
@@ -310,31 +427,50 @@ export function Manage({ services = [], onAdd, onUpdate, onDelete }) {
 
               <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-3">
                 <div className="flex items-center gap-2">
-                  <StatusDot online={s.online} />
-                  <span className="text-xs text-muted-foreground">{s.online ? "Online" : "Offline"}</span>
-                  {s.hidden && <span className="ml-1 text-[11px] font-medium text-amber-400/80">• Hidden</span>}
+                  <StatusDot online={isOnline} />
+                  <span className="text-xs text-muted-foreground">{isOnline ? "Running" : "Exited"}</span>
                 </div>
 
                 <div className="flex items-center gap-1">
+                  {isOnline ? (
+                    <button
+                      onClick={() => handleContainerAction(s, "stop")}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-500/10 text-rose-400"
+                    >
+                      <Square className="h-4 w-4 fill-current" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleContainerAction(s, "start")}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400"
+                    >
+                      <Play className="h-4 w-4 fill-current" />
+                    </button>
+                  )}
                   <button
-                    onClick={() => handleToggleHide(s)}
+                    onClick={() => handleContainerAction(s, "restart")}
+                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/40 text-muted-foreground"
+                  >
+                    <RotateCw className="h-4 w-4" />
+                  </button>
+
+                  <button
+                    onClick={() => handleToggleFavorite(s)}
                     className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
-                      s.hidden
-                        ? "bg-amber-500/10 text-amber-400"
-                        : "bg-secondary/40 text-muted-foreground hover:text-foreground"
+                      s.is_favorite ? "text-amber-400 bg-amber-500/10" : "bg-secondary/40 text-muted-foreground"
                     }`}
                   >
-                    {s.hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    <Star className={`h-4 w-4 ${s.is_favorite ? "fill-amber-400" : ""}`} />
                   </button>
                   <button
                     onClick={() => openEdit(s)}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/40 text-muted-foreground hover:text-foreground"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/40 text-muted-foreground"
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => onDelete && onDelete(s.id)}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-destructive/10 text-destructive"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>

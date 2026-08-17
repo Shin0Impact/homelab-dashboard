@@ -4,11 +4,10 @@ import { glass, useCompactMode, useDynamicPolling } from "./UIHelpers"
 import { StatCards } from "./dashboard/StatCards"
 import { ServiceCard } from "./dashboard/ServiceCard"
 
-export function Dashboard({ services = [], categories = [], onRefresh }) {
+export function Dashboard({ services = [], onRefresh }) {
   const [query, setQuery] = useState("")
-  const [filter, setFilter] = useState("All")
   const [loadingMap, setLoadingMap] = useState({})
-  
+
   const [tailscale, setTailscale] = useState({ connected: false, devicesCount: 0, loading: true })
   const [storage, setStorage] = useState({ usedFormatted: "-- GB", totalFormatted: "-- GB", percentage: 0, drives: [], loading: true })
 
@@ -54,17 +53,12 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
   const onlineCount = services.filter(checkIsOnline).length
   const offlineCount = totalContainers - onlineCount
 
-  const filterOptions = [
-    "All",
-    ...new Set([...categories, ...services.map((s) => s.category).filter(Boolean)]),
-  ]
+  // Only display favorite services on the Dashboard
+  const favoriteServices = services.filter((s) => s.is_favorite || s.favorite)
 
-  const filteredServices = services.filter((s) => {
-    if (s.hidden) return false
-    const matchesQuery = s.name?.toLowerCase().includes(query.toLowerCase())
-    const matchesFilter = filter === "All" || s.category === filter
-    return matchesQuery && matchesFilter
-  })
+  const filteredServices = favoriteServices.filter((s) =>
+    s.name?.toLowerCase().includes(query.toLowerCase())
+  )
 
   const handleToggleContainer = async (service) => {
     const isOnline = checkIsOnline(service)
@@ -94,38 +88,20 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
         tailscale={tailscale}
       />
 
-      {/* Filter & Search Bar */}
-      <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between ${isCompact ? "gap-2" : "gap-3"}`}>
+      {/* Search Bar */}
+      <div className="flex items-center justify-between">
         <div className={`flex items-center gap-2 rounded-xl px-3.5 sm:w-72 ${isCompact ? "py-1.5" : "py-2.5"} ${glass}`}>
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search services…"
+            placeholder="Search favorite services…"
             className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
         </div>
-
-        <div className="flex w-full items-center gap-2 overflow-x-auto pb-1 sm:w-auto sm:pb-0 [scrollbar-width:none]">
-          {filterOptions.map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`shrink-0 rounded-full border transition-colors ${
-                isCompact ? "px-2.5 py-0.5 text-[11px]" : "px-3 py-1 text-xs"
-              } font-medium ${
-                filter === f
-                  ? "border-teal-500/40 bg-teal-500/20 text-teal-400"
-                  : "border-white/5 bg-secondary/30 text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
       </div>
 
-      {/* Services Grid */}
+      {/* Favorite Services Grid */}
       <div className={`grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 ${isCompact ? "gap-2.5" : "gap-3.5"}`}>
         {filteredServices.map((s) => (
           <ServiceCard
@@ -141,7 +117,9 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
 
         {filteredServices.length === 0 && (
           <div className={`col-span-full rounded-2xl py-12 text-center text-sm text-muted-foreground ${glass}`}>
-            No matching services found.
+            {favoriteServices.length === 0
+              ? "No favorite services starred yet. Star services in the Manage tab to display them here."
+              : "No matching favorite services found."}
           </div>
         )}
       </div>
