@@ -102,25 +102,19 @@ export async function getServicesTelemetry() {
       ),
       fetchServiceEndpoint("lidarr", 8686, "/api/v1/queue"),
 
-      // Check Lidarr YT Downloader queue endpoints
+      // Updated to query /api/config on port 5000 (container) / 5005 (host)
       fetchServiceEndpoint(
         "lidarr-youtube-downloader",
-        8080,
-        "/api/queue",
+        5000,
+        "/api/config",
       ).then(
         async (res) =>
           res ||
           fetchServiceEndpoint(
             "lidarr-youtube-downloader",
-            8080,
-            "/api/downloads",
-          ) ||
-          fetchServiceEndpoint(
-            "lidarr-youtube-downloader",
-            8080,
-            "/api/status",
-          ) ||
-          fetchServiceEndpoint("yt-downloader", 8080, "/api/queue"),
+            5005,
+            "/api/config",
+          ),
       ),
     ]);
 
@@ -128,27 +122,17 @@ export async function getServicesTelemetry() {
 
   // 1. Lidarr YT Downloader
   if (ytdlRes?.data) {
-    const data = ytdlRes.data;
-    const queueList = Array.isArray(data)
-      ? data
-      : data.queue || data.downloads || data.items || [];
-
-    const activeCount = Array.isArray(queueList)
-      ? queueList.filter(
-          (item) => item.status !== "completed" && item.status !== "finished",
-        ).length
-      : 0;
-
-    const detailText =
-      activeCount > 0
-        ? `${activeCount} in Queue`
-        : queueList.length > 0
-          ? `${queueList.length} Tracks Processed`
-          : "Queue Empty";
+    const config = ytdlRes.data;
+    const isSchedulerActive = config.scheduler_enabled;
+    const pathConflict = config.path_conflict;
 
     telemetry.ytdl = {
       label: "Lidarr YT Downloader",
-      detail: detailText,
+      detail: pathConflict
+        ? "Path Conflict Detected"
+        : isSchedulerActive
+          ? "Scheduler Active • Operational"
+          : "Ready • Service Active",
       status: "online",
       priority: true,
     };
@@ -162,7 +146,7 @@ export async function getServicesTelemetry() {
 
     telemetry.ytdl = {
       label: "Lidarr YT Downloader",
-      detail: fallback?.online ? "Active • 0 in Queue" : "Container Offline",
+      detail: fallback?.online ? "Ready • Service Active" : "Container Offline",
       status: fallback?.online ? "online" : "offline",
       priority: true,
     };
