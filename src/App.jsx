@@ -33,10 +33,24 @@ export default function App() {
   const [services, setServices] = useState([])
   const [categories, setCategories] = useState([])
 
-  // Dynamic refresh interval from Redux settings (in seconds), falling back to localStorage or default 10s
-  const refreshSec = useSelector((state) => state.settings?.refresh) || 
-    Number(localStorage.getItem("homelab_refresh")) || 10
-  const refreshMs = refreshSec * 1000
+  // Calculate refresh rate in ms (Default: 15 FPS ≈ 66.67 ms, Range: 60 FPS [16.67ms] to 0.2 FPS [5000ms])
+  const refreshSetting = useSelector((state) => state.settings?.refresh) || 
+    Number(localStorage.getItem("homelab_refresh")) || 15
+
+  const refreshMs = React.useMemo(() => {
+    let ms = 1000 / 15 // Default 15 FPS (~66.67 ms)
+
+    if (refreshSetting <= 60 && refreshSetting >= 0.2) {
+      // Input is passed as FPS (0.2 FPS to 60 FPS)
+      ms = 1000 / refreshSetting
+    } else if (refreshSetting >= 16 && refreshSetting <= 5000) {
+      // Input is passed as raw Milliseconds (16ms to 5000ms)
+      ms = refreshSetting
+    }
+
+    // Clamp between ~16.67ms (60 FPS) and 5000ms (1/5 FPS)
+    return Math.min(Math.max(Math.round(ms), 16), 5000)
+  }, [refreshSetting])
 
   // Store favorite service IDs in localStorage so polling doesn't overwrite them
   const [favoriteIds, setFavoriteIds] = useState(() => {
@@ -62,7 +76,7 @@ export default function App() {
     return token ? { Authorization: `Bearer ${token}` } : {}
   }, [])
 
-  // Telemetry Polling Effect using dynamic refresh interval
+  // Telemetry Polling Effect using sub-second ms refresh interval
   useEffect(() => {
     if (!authed) return
 
@@ -120,7 +134,7 @@ export default function App() {
     }
   }, [getAuthHeaders, applyFavorites])
 
-  // Container Polling Effect using dynamic refresh interval
+  // Container Polling Effect using sub-second ms refresh interval
   useEffect(() => {
     if (!authed) return
     fetchContainers()
