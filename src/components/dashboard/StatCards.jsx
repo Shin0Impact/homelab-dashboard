@@ -9,7 +9,7 @@ export function StatCards({ isCompact, totalContainers, onlineCount, offlineCoun
     <div className="space-y-3">
       {/* Primary System Stat Cards */}
       <div className={`grid grid-cols-2 lg:grid-cols-4 ${isCompact ? "gap-2" : "gap-3"}`}>
-        {/* Containers */}
+        {/* Total Containers */}
         <div className={`flex flex-col justify-between rounded-xl transition-all ${isCompact ? "h-28 p-2.5" : "h-32 p-4"} ${glass}`}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Total Containers</span>
@@ -23,7 +23,7 @@ export function StatCards({ isCompact, totalContainers, onlineCount, offlineCoun
           </div>
         </div>
 
-        {/* Online Services */}
+        {/* Services Online */}
         <div className={`flex flex-col justify-between rounded-xl transition-all ${isCompact ? "h-28 p-2.5" : "h-32 p-4"} ${glass}`}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Services Online</span>
@@ -37,7 +37,7 @@ export function StatCards({ isCompact, totalContainers, onlineCount, offlineCoun
           </div>
         </div>
 
-        {/* Storage Card */}
+        {/* Storage */}
         <div
           className={`group flex flex-col justify-between rounded-xl transition-all duration-200 cursor-pointer ${
             isCompact ? "h-28 p-2.5" : "h-32 p-4"
@@ -122,74 +122,66 @@ export function StatCards({ isCompact, totalContainers, onlineCount, offlineCoun
         <div className="grid grid-cols-2 min-[480px]:grid-cols-3 lg:grid-cols-6 gap-2">
           {/* Frigate */}
           <div className={`flex items-center gap-2.5 rounded-xl p-2.5 ${glass}`}>
-            <Camera className="h-4 w-4 text-cyan-400 shrink-0" />
+            <Camera className={`h-4 w-4 shrink-0 ${servicesTelemetry.frigate?.online ? "text-cyan-400" : "text-muted-foreground"}`} />
             <div className="truncate">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Frigate</p>
               <p className="text-xs font-semibold truncate">
-                {servicesTelemetry.frigate?.online 
-                  ? `${servicesTelemetry.frigate.label} (${servicesTelemetry.frigate.lastDetection})` 
-                  : "Offline"}
+                {servicesTelemetry.frigate?.detail || "Offline"}
               </p>
             </div>
           </div>
 
           {/* qBittorrent */}
           <div className={`flex items-center gap-2.5 rounded-xl p-2.5 ${glass}`}>
-            <Download className="h-4 w-4 text-blue-400 shrink-0" />
+            <Download className={`h-4 w-4 shrink-0 ${servicesTelemetry.qbittorrent?.online ? "text-blue-400" : "text-muted-foreground"}`} />
             <div className="truncate">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">qBittorrent</p>
               <p className="text-xs font-semibold truncate">
-                {servicesTelemetry.qbittorrent?.online 
-                  ? `${servicesTelemetry.qbittorrent.dlSpeedMB} MB/s` 
-                  : "Offline"}
+                {servicesTelemetry.qbittorrent?.detail || "Offline"}
               </p>
             </div>
           </div>
 
           {/* Home Assistant */}
           <div className={`flex items-center gap-2.5 rounded-xl p-2.5 ${glass}`}>
-            <Home className="h-4 w-4 text-amber-400 shrink-0" />
+            <Home className={`h-4 w-4 shrink-0 ${servicesTelemetry.homeassistant?.online ? "text-amber-400" : "text-muted-foreground"}`} />
             <div className="truncate">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Home Assistant</p>
               <p className="text-xs font-semibold truncate">
-                {servicesTelemetry.homeassistant?.online ? "Active" : "Offline"}
+                {servicesTelemetry.homeassistant?.detail || "Offline"}
               </p>
             </div>
           </div>
 
           {/* Immich */}
           <div className={`flex items-center gap-2.5 rounded-xl p-2.5 ${glass}`}>
-            <Image className="h-4 w-4 text-purple-400 shrink-0" />
+            <Image className={`h-4 w-4 shrink-0 ${servicesTelemetry.immich?.online ? "text-purple-400" : "text-muted-foreground"}`} />
             <div className="truncate">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Immich</p>
               <p className="text-xs font-semibold truncate">
-                {servicesTelemetry.immich?.online 
-                  ? `${servicesTelemetry.immich.photos} Photos` 
-                  : "Offline"}
+                {servicesTelemetry.immich?.detail || "Offline"}
               </p>
             </div>
           </div>
 
           {/* Lidarr */}
           <div className={`flex items-center gap-2.5 rounded-xl p-2.5 ${glass}`}>
-            <Music className="h-4 w-4 text-emerald-400 shrink-0" />
+            <Music className={`h-4 w-4 shrink-0 ${servicesTelemetry.lidarr?.online ? "text-emerald-400" : "text-muted-foreground"}`} />
             <div className="truncate">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Lidarr</p>
               <p className="text-xs font-semibold truncate">
-                {servicesTelemetry.lidarr?.online 
-                  ? `${servicesTelemetry.lidarr.queuedCount} Queued` 
-                  : "Offline"}
+                {servicesTelemetry.lidarr?.detail || "Offline"}
               </p>
             </div>
           </div>
 
           {/* YT Downloader */}
           <div className={`flex items-center gap-2.5 rounded-xl p-2.5 ${glass}`}>
-            <Video className="h-4 w-4 text-red-400 shrink-0" />
+            <Video className={`h-4 w-4 shrink-0 ${servicesTelemetry.ytdl?.online ? "text-red-400" : "text-muted-foreground"}`} />
             <div className="truncate">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">YTDL</p>
               <p className="text-xs font-semibold truncate">
-                {servicesTelemetry.ytdl?.online ? "Active" : "Offline"}
+                {servicesTelemetry.ytdl?.detail || "Offline"}
               </p>
             </div>
           </div>
