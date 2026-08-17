@@ -120,7 +120,7 @@ export default function App() {
   )
   // If saving custom services to localStorage:
   // localStorage.setItem("homelab_custom_services", JSON.stringify(updatedList))
-}
+
 
   try {
     const res = await fetch(`/api/services/${updatedService.id}`, {
