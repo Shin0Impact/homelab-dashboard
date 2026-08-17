@@ -9,7 +9,7 @@ import {
   Home,
   Image,
   Music,
-  Video, // <-- Replaced Youtube with Video
+  Video,
 } from "lucide-react";
 import { glass } from "../UIHelpers";
 
@@ -33,10 +33,10 @@ export function StatCards({
 }) {
   const [isHoveredStorage, setIsHoveredStorage] = useState(false);
 
-  // Sort active services so Lidarr YT Downloader (or prioritized items) always render first
+  // Render online services + explicit priority cards
   const activeServices = servicesTelemetry
     ? Object.entries(servicesTelemetry)
-        .filter(([_, data]) => data && data.status === "online")
+        .filter(([_, data]) => data && (data.status === "online" || data.priority))
         .sort(([keyA, dataA], [keyB, dataB]) => {
           if (dataA.priority || keyA === "ytdl") return -1;
           if (dataB.priority || keyB === "ytdl") return 1;
@@ -46,7 +46,6 @@ export function StatCards({
 
   return (
     <div className="space-y-3">
-      {/* System Overview Stat Cards */}
       <div
         className={`grid grid-cols-2 lg:grid-cols-4 ${
           isCompact ? "gap-2" : "gap-3"
@@ -217,7 +216,7 @@ export function StatCards({
         </div>
       </div>
 
-      {/* Priority Service Telemetry Bar */}
+      {/* Telemetry Bar */}
       {activeServices.length > 0 && (
         <div className="flex flex-wrap gap-2.5 pt-1">
           {activeServices.map(([key, data]) => {

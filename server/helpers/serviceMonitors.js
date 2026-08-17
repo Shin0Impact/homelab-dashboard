@@ -37,7 +37,6 @@ async function fetchServiceEndpoint(
   return null;
 }
 
-// Fixed to search ALL containers (all: true) so stopped/exited containers are detected correctly
 async function checkDockerContainerStatus(possibleNames) {
   try {
     const containers = await docker.listContainers({ all: true });
@@ -58,7 +57,7 @@ async function checkDockerContainerStatus(possibleNames) {
       };
     }
   } catch {
-    // Docker socket fallback unavailable
+    // Docker socket unavailable
   }
   return null;
 }
@@ -102,28 +101,54 @@ export async function getServicesTelemetry() {
           fetchServiceEndpoint("immich-server", 2283, "/api/server/statistics"),
       ),
       fetchServiceEndpoint("lidarr", 8686, "/api/v1/queue"),
+
+      // Check Lidarr YT Downloader queue endpoints
       fetchServiceEndpoint(
         "lidarr-youtube-downloader",
         8080,
-        "/api/history",
+        "/api/queue",
       ).then(
         async (res) =>
-          res || fetchServiceEndpoint("yt-downloader", 8080, "/api/downloads"),
+          res ||
+          fetchServiceEndpoint(
+            "lidarr-youtube-downloader",
+            8080,
+            "/api/downloads",
+          ) ||
+          fetchServiceEndpoint(
+            "lidarr-youtube-downloader",
+            8080,
+            "/api/status",
+          ) ||
+          fetchServiceEndpoint("yt-downloader", 8080, "/api/queue"),
       ),
     ]);
 
   const telemetry = {};
 
-  // 1. Lidarr YT Downloader (Always Priority)
+  // 1. Lidarr YT Downloader
   if (ytdlRes?.data) {
-    const historyData = ytdlRes.data;
-    const historyList = Array.isArray(historyData)
-      ? historyData
-      : historyData.data || historyData.items || [];
+    const data = ytdlRes.data;
+    const queueList = Array.isArray(data)
+      ? data
+      : data.queue || data.downloads || data.items || [];
+
+    const activeCount = Array.isArray(queueList)
+      ? queueList.filter(
+          (item) => item.status !== "completed" && item.status !== "finished",
+        ).length
+      : 0;
+
+    const detailText =
+      activeCount > 0
+        ? `${activeCount} in Queue`
+        : queueList.length > 0
+          ? `${queueList.length} Tracks Processed`
+          : "Queue Empty";
 
     telemetry.ytdl = {
       label: "Lidarr YT Downloader",
-      detail: `${historyList.length} Tracks Processed`,
+      detail: detailText,
       status: "online",
       priority: true,
     };
@@ -132,19 +157,18 @@ export async function getServicesTelemetry() {
       "lidarr-youtube-downloader",
       "lidarr_youtube_downloader",
       "lidarr-yt-downloader",
-      "yt-downloader",
       "angrido/lidarr-downloader",
     ]);
 
     telemetry.ytdl = {
       label: "Lidarr YT Downloader",
-      detail: fallback ? `Container ${fallback.status}` : "Container Stopped",
+      detail: fallback?.online ? "Active • 0 in Queue" : "Container Offline",
       status: fallback?.online ? "online" : "offline",
       priority: true,
     };
   }
 
-  // 2. Frigate (Restored person / event timestamp)
+  // 2. Frigate (With event relative timestamp)
   if (frigateRes?.data) {
     const events = frigateRes.data;
     if (Array.isArray(events) && events.length > 0) {
