@@ -114,11 +114,13 @@ export default function App() {
     }
   }
 
-  const handleUpdateService = async (updatedService) => {
-  // Optimistically update local state so UI updates immediately
+  const handleUpdateService = (updatedService) => {
   setServices((prev) =>
-    prev.map((s) => (s.id === updatedService.id ? { ...s, ...updatedService } : s))
+    prev.map((s) => (s.id === updatedService.id ? updatedService : s))
   )
+  // If saving custom services to localStorage:
+  // localStorage.setItem("homelab_custom_services", JSON.stringify(updatedList))
+}
 
   try {
     const res = await fetch(`/api/services/${updatedService.id}`, {

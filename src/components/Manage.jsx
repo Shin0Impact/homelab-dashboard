@@ -164,18 +164,24 @@ function ServiceModal({ initial, onClose, onSave }) {
 }
 
 export function Manage({
-  services = [],
+  services: initialServices = [],
   categories = [],
   onAdd,
   onUpdate,
   onDelete,
   onRefresh,
 }) {
+  const [localServices, setLocalServices] = useState(initialServices)
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("All")
   const [actionLoadingMap, setActionLoadingMap] = useState({})
+
+  // Keep local state in sync when parent props change
+  useEffect(() => {
+    setLocalServices(initialServices)
+  }, [initialServices])
 
   const checkIsOnline = (s) => s.online || s.status === "online" || s.state === "running"
   const checkIsFavorite = (s) => Boolean(s.is_favorite || s.favorite)
@@ -195,13 +201,21 @@ export function Manage({
   }
 
   function handleToggleFavorite(s) {
+    const isFav = !checkIsFavorite(s)
+    const updatedService = {
+      ...s,
+      is_favorite: isFav,
+      favorite: isFav,
+    }
+
+    // 1. Immediate optimistic UI update locally
+    setLocalServices((prev) =>
+      prev.map((item) => (item.id === s.id ? updatedService : item))
+    )
+
+    // 2. Persist up to parent state handler
     if (onUpdate) {
-      const isFav = !checkIsFavorite(s)
-      onUpdate({
-        ...s,
-        is_favorite: isFav,
-        favorite: isFav,
-      })
+      onUpdate(updatedService)
     }
   }
 
@@ -221,10 +235,10 @@ export function Manage({
 
   const filterOptions = [
     "All",
-    ...new Set([...categories, ...services.map((s) => s.category).filter(Boolean)]),
+    ...new Set([...categories, ...localServices.map((s) => s.category).filter(Boolean)]),
   ]
 
-  const filteredServices = services.filter((s) => {
+  const filteredServices = localServices.filter((s) => {
     const q = searchTerm.toLowerCase()
     const matchesSearch =
       s.name?.toLowerCase().includes(q) ||
@@ -253,7 +267,7 @@ export function Manage({
 
         <div className="flex items-center justify-between gap-4 sm:justify-end">
           <p className="text-sm text-muted-foreground">
-            {filteredServices.length} of {services.length} services
+            {filteredServices.length} of {localServices.length} services
           </p>
           <button
             onClick={openAdd}
@@ -404,7 +418,9 @@ export function Manage({
             {filteredServices.length === 0 && (
               <tr>
                 <td colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
-                  {services.length === 0 ? "No services registered or discovered." : "No services match your search."}
+                  {localServices.length === 0
+                    ? "No services registered or discovered."
+                    : "No services match your search."}
                 </td>
               </tr>
             )}
@@ -430,7 +446,9 @@ export function Manage({
                   </span>
                   <div>
                     <p className="font-semibold text-sm">{s.name}</p>
-                    <p className="font-mono text-xs text-muted-foreground truncate max-w-[180px] sm:max-w-xs">{computedUrl}</p>
+                    <p className="font-mono text-xs text-muted-foreground truncate max-w-[180px] sm:max-w-xs">
+                      {computedUrl}
+                    </p>
                   </div>
                 </div>
                 <CategoryTag category={s.category} />
@@ -493,7 +511,9 @@ export function Manage({
 
         {filteredServices.length === 0 && (
           <div className={`py-8 text-center text-sm text-muted-foreground ${glass} rounded-xl`}>
-            {services.length === 0 ? "No services registered or discovered." : "No services match your search."}
+            {localServices.length === 0
+              ? "No services registered or discovered."
+              : "No services match your search."}
           </div>
         )}
       </div>
