@@ -1,6 +1,6 @@
 import React from "react"
 import { useSelector, useDispatch } from "react-redux"
-import { setSettings, resetSettings } from "../store/settingsSlice"
+import { setSettings, resetSettings } from "../../store/settingsSlice"
 import { Download, Upload, RotateCcw } from "lucide-react"
 
 const glass =

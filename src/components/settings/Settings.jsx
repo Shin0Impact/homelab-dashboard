@@ -1,10 +1,10 @@
 import React, { useEffect } from "react"
 import { useSelector, useDispatch } from "react-redux"
 import { setSettings } from "../store/settingsSlice"
-import { CategoriesSettings } from "./CategoriesSettings"
-import { AppearanceSettings } from "./AppearanceSettings"
-import { UserSettings } from "./UserSettings"
-import { BackupSettings } from "./BackupSettings"
+import { CategoriesSettings } from "./settings/CategoriesSettings"
+import { AppearanceSettings } from "./settings/AppearanceSettings"
+import { UserSettings } from "./settings/UserSettings"
+import { BackupSettings } from "./settings/BackupSettings"
 
 export function Settings() {
   const dispatch = useDispatch()

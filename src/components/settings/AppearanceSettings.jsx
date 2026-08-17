@@ -1,6 +1,6 @@
 import React from "react"
 import { useSelector, useDispatch } from "react-redux"
-import { setCompact, setTheme, setRefresh } from "../store/settingsSlice"
+import { setCompact, setTheme, setRefresh } from "../../store/settingsSlice"
 import { Moon, Sun, Sparkles } from "lucide-react"
 
 const glass =
