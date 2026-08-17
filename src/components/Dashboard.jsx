@@ -32,6 +32,13 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
     loading: true,
   })
 
+  // Dynamic Storage State
+  const [storage, setStorage] = useState({
+    usedFormatted: "-- GB",
+    totalFormatted: "-- GB",
+    loading: true,
+  })
+
   // Subscribe to settings customization
   const isCompact = useCompactMode()
 
@@ -48,14 +55,29 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
     }
   }
 
+  // Fetch Storage Telemetry
+  const fetchStorageStatus = async () => {
+    try {
+      const res = await fetch("/api/storage")
+      if (res.ok) {
+        const data = await res.json()
+        setStorage({ ...data, loading: false })
+      }
+    } catch {
+      setStorage({ usedFormatted: "N/A", totalFormatted: "N/A", loading: false })
+    }
+  }
+
   useEffect(() => {
     fetchTailscaleStatus()
+    fetchStorageStatus()
   }, [])
 
   // Polling auto-refresh using dynamic slider setting
   useDynamicPolling(() => {
     if (onRefresh) onRefresh()
     fetchTailscaleStatus()
+    fetchStorageStatus()
   })
 
   // Helper to determine if service is online regardless of backend property naming
@@ -161,7 +183,7 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
           </p>
         </div>
 
-        {/* Storage */}
+        {/* Storage (Dynamic) */}
         <div className={`rounded-xl transition-all ${isCompact ? "p-2.5" : "p-4"} ${glass}`}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">
@@ -171,9 +193,11 @@ export function Dashboard({ services = [], categories = [], onRefresh }) {
               <HardDrive className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
             </div>
           </div>
-          <p className={`font-bold ${isCompact ? "mt-1 text-xl" : "mt-2 text-2xl"}`}>2.4 TB</p>
+          <p className={`font-bold ${isCompact ? "mt-1 text-xl" : "mt-2 text-2xl"}`}>
+            {storage.loading ? "Checking..." : storage.usedFormatted}
+          </p>
           <p className="text-[11px] text-muted-foreground">
-            of 4 TB pool used
+            of {storage.totalFormatted} pool used
           </p>
         </div>
 

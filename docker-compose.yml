@@ -10,5 +10,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock
       - /usr/bin/tailscale:/usr/bin/tailscale:ro
+      - /:/host:ro
     environment:
       - NODE_ENV=production

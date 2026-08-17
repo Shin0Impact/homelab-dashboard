@@ -99,6 +99,33 @@ const saveSettings = (settingsData) => {
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settingsData, null, 2));
 };
 
+// Storage Telemetry Helper
+function getStorageStats() {
+  try {
+    const targetPath = fs.existsSync("/host") ? "/host" : "/";
+    const stats = fs.statfsSync(targetPath);
+
+    const totalBytes = stats.blocks * stats.bsize;
+    const freeBytes = stats.bfree * stats.bsize;
+    const usedBytes = totalBytes - freeBytes;
+
+    const totalGB = totalBytes / 1024 ** 3;
+    const usedGB = usedBytes / 1024 ** 3;
+
+    const formatSize = (gb) =>
+      gb >= 1000 ? `${(gb / 1024).toFixed(1)} TB` : `${gb.toFixed(1)} GB`;
+
+    return {
+      usedFormatted: formatSize(usedGB),
+      totalFormatted: formatSize(totalGB),
+      percentage: Math.round((usedBytes / totalBytes) * 100),
+    };
+  } catch (err) {
+    console.error("Storage stat error:", err);
+    return { usedFormatted: "N/A", totalFormatted: "N/A", percentage: 0 };
+  }
+}
+
 // --- Dockerode Initialization ---
 const isWindows = process.platform === "win32";
 const docker = new Docker(
@@ -177,12 +204,10 @@ app.post("/api/login", async (req, res) => {
 
 app.get("/api/tailscale", async (req, res) => {
   try {
-    // Queries local host Tailscale CLI
     const { stdout } = await execAsync("tailscale status --json");
     const status = JSON.parse(stdout);
 
     const isConnected = status.BackendState === "Running";
-    // Count connected peer devices + local host
     const activePeers = status.Peer ? Object.keys(status.Peer).length : 0;
     const totalDevices = isConnected ? activePeers + 1 : 0;
 
@@ -192,13 +217,16 @@ app.get("/api/tailscale", async (req, res) => {
       tailnet: status.CurrentTailnet?.Name || "tailnet",
     });
   } catch (err) {
-    // Fallback if Tailscale CLI isn't installed or accessible on host
     res.json({
       connected: false,
       devicesCount: 0,
       tailnet: "disconnected",
     });
   }
+});
+
+app.get("/api/storage", (req, res) => {
+  res.json(getStorageStats());
 });
 
 app.get("/api/users", authenticateToken, requireAdmin, (req, res) => {
