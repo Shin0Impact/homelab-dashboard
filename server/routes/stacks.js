@@ -7,6 +7,55 @@ import { execAsync } from "../helpers/sysInfo.js";
 
 const router = express.Router();
 
+// Helper: Locate original compose file on host filesystem using Docker labels
+async function findHostComposeFilePath(stackName) {
+  try {
+    const rawContainers = await docker.listContainers({ all: true });
+    const stackContainers = rawContainers.filter((c) => {
+      const proj = c.Labels?.["com.docker.compose.project"];
+      return proj === stackName;
+    });
+
+    if (stackContainers.length === 0) return null;
+
+    const container = docker.getContainer(stackContainers[0].Id);
+    const inspectData = await container.inspect();
+    const labels = inspectData.Config?.Labels || {};
+
+    // 1. Try explicit config_files label (e.g. "/root/immich/docker-compose.yml")
+    const configFilesLabel = labels["com.docker.compose.project.config_files"];
+    if (configFilesLabel) {
+      const firstFile = configFilesLabel.split(",")[0].trim();
+      const mappedPath = path.join("/host", firstFile);
+      if (fs.existsSync(mappedPath)) {
+        return { realHostPath: firstFile, containerPath: mappedPath };
+      }
+    }
+
+    // 2. Fall back to working_dir label
+    const workingDir = labels["com.docker.compose.project.working_dir"];
+    if (workingDir) {
+      const candidates = [
+        path.join("/host", workingDir, "docker-compose.yml"),
+        path.join("/host", workingDir, "docker-compose.yaml"),
+        path.join("/host", workingDir, "compose.yml"),
+        path.join("/host", workingDir, "compose.yaml"),
+      ];
+
+      for (const cand of candidates) {
+        if (fs.existsSync(cand)) {
+          const originalPath = cand.replace(/^\/host/, "");
+          return { realHostPath: originalPath, containerPath: cand };
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Failed to inspect host compose path:", err);
+  }
+
+  return null;
+}
+
 // List all stacks (running containers + local directories)
 router.get("/", async (req, res) => {
   try {
@@ -73,19 +122,96 @@ router.get("/", async (req, res) => {
   }
 });
 
-// GET raw compose file for editing/viewing
-router.get("/:name/compose", (req, res) => {
+// GET raw compose file (Local app data -> Host disk -> Reconstructed fallback)
+router.get("/:name/compose", async (req, res) => {
   const { name } = req.params;
-  const composePath = path.join(STACKS_DIR, name, "docker-compose.yml");
 
-  if (fs.existsSync(composePath)) {
-    const composeContent = fs.readFileSync(composePath, "utf-8");
-    return res.json({ name, composeContent });
+  // 1. Check local dashboard data folder first (./data/stacks/<name>/docker-compose.yml)
+  const localComposePath = path.join(STACKS_DIR, name, "docker-compose.yml");
+  if (fs.existsSync(localComposePath)) {
+    const composeContent = fs.readFileSync(localComposePath, "utf-8");
+    return res.json({ name, composeContent, source: "local" });
+  }
+
+  // 2. Check original file on host disk via Docker labels
+  const hostFileInfo = await findHostComposeFilePath(name);
+  if (hostFileInfo) {
+    try {
+      const composeContent = fs.readFileSync(
+        hostFileInfo.containerPath,
+        "utf-8",
+      );
+      return res.json({
+        name,
+        composeContent,
+        source: `host (${hostFileInfo.realHostPath})`,
+      });
+    } catch (err) {
+      console.error(
+        `Failed to read file at ${hostFileInfo.containerPath}:`,
+        err,
+      );
+    }
+  }
+
+  // 3. Fallback for containers without compose files (e.g. CasaOS / Standalone)
+  try {
+    const rawContainers = await docker.listContainers({ all: true });
+    const stackContainers = rawContainers.filter((c) => {
+      const proj = c.Labels?.["com.docker.compose.project"];
+      return proj === name || (name === "standalone" && !proj);
+    });
+
+    if (stackContainers.length > 0) {
+      let generatedCompose = `version: '3.8'\nservices:\n`;
+
+      for (const containerSummary of stackContainers) {
+        const container = docker.getContainer(containerSummary.Id);
+        const inspectData = await container.inspect();
+
+        const serviceName =
+          inspectData.Config.Labels?.["com.docker.compose.service"] ||
+          inspectData.Name.replace("/", "");
+        const image = inspectData.Config.Image;
+        const restartPolicy =
+          inspectData.HostConfig.RestartPolicy?.Name || "unless-stopped";
+
+        generatedCompose += `  ${serviceName}:\n`;
+        generatedCompose += `    image: ${image}\n`;
+        generatedCompose += `    restart: ${restartPolicy}\n`;
+
+        // Extract Ports
+        const portBindings = inspectData.HostConfig.PortBindings || {};
+        const portEntries = [];
+        for (const [containerPort, hostBindings] of Object.entries(
+          portBindings,
+        )) {
+          if (hostBindings && hostBindings.length > 0) {
+            const hostPort = hostBindings[0].HostPort;
+            const cPort = containerPort.split("/")[0];
+            portEntries.push(`      - "${hostPort}:${cPort}"`);
+          }
+        }
+        if (portEntries.length > 0) {
+          generatedCompose += `    ports:\n${portEntries.join("\n")}\n`;
+        }
+        generatedCompose += `\n`;
+      }
+
+      return res.json({
+        name,
+        composeContent: generatedCompose.trimEnd(),
+        source: "reconstructed",
+      });
+    }
+  } catch (err) {
+    console.error("Failed to generate fallback compose:", err);
   }
 
   return res.json({
     name,
-    composeContent: `# No local docker-compose.yml stored on disk for stack: ${name}\nservices:\n`,
+    composeContent: `# No docker-compose configuration detected for stack: ${name}\nservices:\n`,
+    source: "none",
   });
 });
 
