@@ -2,11 +2,13 @@ import express from "express";
 import { docker, inferCategoryAndIcon } from "../helpers/dockerUtils.js";
 import { getCustomServices, saveCustomServices } from "../helpers/storage.js";
 import { WELL_KNOWN_PORTS } from "../config/constants.js";
+import { authenticateToken, requireAdmin } from "./auth.js";
 
 const router = express.Router();
 
-router.get("/containers", handleGetServices);
-router.get("/services", handleGetServices);
+// Reads: any logged-in user (Admin or Viewer) can see what's running.
+router.get("/containers", authenticateToken, handleGetServices);
+router.get("/services", authenticateToken, handleGetServices);
 
 async function handleGetServices(req, res) {
   res.setHeader("Content-Type", "application/json");
@@ -115,7 +117,9 @@ async function handleGetServices(req, res) {
   }
 }
 
-router.post("/services", (req, res) => {
+// Writes: registering, editing, or removing a service entry is an
+// infrastructure change, so it's Admin-only, same as container start/stop.
+router.post("/services", authenticateToken, requireAdmin, (req, res) => {
   try {
     const custom = getCustomServices();
     const newService = {
@@ -134,7 +138,7 @@ router.post("/services", (req, res) => {
   }
 });
 
-router.put("/services/:id", async (req, res) => {
+router.put("/services/:id", authenticateToken, requireAdmin, async (req, res) => {
   try {
     let custom = getCustomServices();
     const { id } = req.params;
@@ -170,7 +174,7 @@ router.put("/services/:id", async (req, res) => {
   }
 });
 
-router.delete("/services/:id", (req, res) => {
+router.delete("/services/:id", authenticateToken, requireAdmin, (req, res) => {
   try {
     const { id } = req.params;
     let custom = getCustomServices();
@@ -182,21 +186,71 @@ router.delete("/services/:id", (req, res) => {
   }
 });
 
-router.post("/containers/:id/:action", async (req, res) => {
-  const { id, action } = req.params;
-  try {
-    const container = docker.getContainer(id);
-    if (action === "start") await container.start();
-    else if (action === "stop") await container.stop();
-    else if (action === "restart") await container.restart();
-    else return res.status(400).json({ error: "Invalid action" });
+// Starting/stopping/restarting a container is a real infrastructure action —
+// previously this had NO auth check at all, so anyone who could reach the
+// API could control any container on the host. Admin-only now.
+router.post(
+  "/containers/:id/:action",
+  authenticateToken,
+  requireAdmin,
+  async (req, res) => {
+    const { id, action } = req.params;
+    try {
+      const container = docker.getContainer(id);
+      if (action === "start") await container.start();
+      else if (action === "stop") await container.stop();
+      else if (action === "restart") await container.restart();
+      else return res.status(400).json({ error: "Invalid action" });
 
-    res.json({ success: true });
-  } catch (err) {
-    res
-      .status(500)
-      .json({ error: `Failed to ${action} container`, details: err.message });
+      res.json({ success: true });
+    } catch (err) {
+      res
+        .status(500)
+        .json({ error: `Failed to ${action} container`, details: err.message });
+    }
+  },
+);
+
+// Container logs — the frontend's LogModal already called this endpoint,
+// but it never existed on the backend, so the log viewer was silently
+// broken. Any logged-in user can view logs (matches read access elsewhere).
+router.get(
+  "/containers/:id/logs",
+  authenticateToken,
+  async (req, res) => {
+    const { id } = req.params;
+    try {
+      const container = docker.getContainer(id);
+      const rawLogs = await container.logs({
+        stdout: true,
+        stderr: true,
+        tail: 500,
+        timestamps: false,
+      });
+      res.type("text/plain").send(demuxDockerLogBuffer(rawLogs));
+    } catch (err) {
+      res
+        .status(500)
+        .json({ error: "Failed to fetch container logs", details: err.message });
+    }
+  },
+);
+
+// Docker multiplexes stdout/stderr into one stream with an 8-byte header per
+// frame (when the container wasn't created with a TTY), so a raw buffer
+// isn't readable text on its own — strip the framing.
+function demuxDockerLogBuffer(buffer) {
+  let result = "";
+  let offset = 0;
+  while (offset + 8 <= buffer.length) {
+    const frameSize = buffer.readUInt32BE(offset + 4);
+    const start = offset + 8;
+    const end = start + frameSize;
+    if (end > buffer.length) break;
+    result += buffer.toString("utf-8", start, end);
+    offset = end;
   }
-});
+  return result || buffer.toString("utf-8");
+}
 
 export default router;

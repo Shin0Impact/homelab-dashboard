@@ -3,9 +3,21 @@ import fs from "fs";
 import path from "path";
 import { docker } from "../helpers/dockerUtils.js";
 import { STACKS_DIR } from "../config/constants.js";
-import { execAsync } from "../helpers/sysInfo.js";
+import { execFileAsync } from "../helpers/sysInfo.js";
+import { authenticateToken, requireAdmin } from "./auth.js";
 
 const router = express.Router();
+
+// Compose project names are the only thing we accept from the network that
+// ends up in a filesystem path or a command argument — keep it to a safe
+// character set so it can't be used for path traversal ("../../etc") or,
+// now that commands run via execFile instead of a shell, command injection
+// isn't reachable through this value either way. Belt and suspenders.
+const STACK_NAME_RE = /^[a-zA-Z0-9](?:[a-zA-Z0-9._-]{0,127})$/;
+
+function isValidStackName(name) {
+  return typeof name === "string" && STACK_NAME_RE.test(name);
+}
 
 // Helper: Locate original compose file on host filesystem using Docker labels
 async function findHostComposeFilePath(stackName) {
@@ -22,12 +34,23 @@ async function findHostComposeFilePath(stackName) {
     const inspectData = await container.inspect();
     const labels = inspectData.Config?.Labels || {};
 
+    const hostRoot = path.resolve("/host");
+
+    // A path is only accepted if it actually resolves inside /host — labels
+    // come from Docker metadata, but if a stack was ever deployed with a
+    // crafted config_files/working_dir label, this stops it from reading
+    // anything outside the intended host mount.
+    const withinHostRoot = (candidate) => {
+      const resolved = path.resolve(candidate);
+      return resolved === hostRoot || resolved.startsWith(hostRoot + path.sep);
+    };
+
     // 1. Try explicit config_files label (e.g. "/root/immich/docker-compose.yml")
     const configFilesLabel = labels["com.docker.compose.project.config_files"];
     if (configFilesLabel) {
       const firstFile = configFilesLabel.split(",")[0].trim();
       const mappedPath = path.join("/host", firstFile);
-      if (fs.existsSync(mappedPath)) {
+      if (withinHostRoot(mappedPath) && fs.existsSync(mappedPath)) {
         return { realHostPath: firstFile, containerPath: mappedPath };
       }
     }
@@ -43,7 +66,7 @@ async function findHostComposeFilePath(stackName) {
       ];
 
       for (const cand of candidates) {
-        if (fs.existsSync(cand)) {
+        if (withinHostRoot(cand) && fs.existsSync(cand)) {
           const originalPath = cand.replace(/^\/host/, "");
           return { realHostPath: originalPath, containerPath: cand };
         }
@@ -56,8 +79,10 @@ async function findHostComposeFilePath(stackName) {
   return null;
 }
 
-// List all stacks (running containers + local directories)
-router.get("/", async (req, res) => {
+// Reads: any logged-in user can see what stacks exist and their compose
+// content (useful for Viewers troubleshooting). Only deploy/down/delete are
+// Admin-only, below.
+router.get("/", authenticateToken, async (req, res) => {
   try {
     const rawContainers = await docker.listContainers({ all: true });
     const stackMap = {};
@@ -123,8 +148,11 @@ router.get("/", async (req, res) => {
 });
 
 // GET raw compose file (Local app data -> Host disk -> Reconstructed fallback)
-router.get("/:name/compose", async (req, res) => {
+router.get("/:name/compose", authenticateToken, async (req, res) => {
   const { name } = req.params;
+  if (!isValidStackName(name)) {
+    return res.status(400).json({ error: "Invalid stack name" });
+  }
 
   // 1. Check local dashboard data folder first (./data/stacks/<name>/docker-compose.yml)
   const localComposePath = path.join(STACKS_DIR, name, "docker-compose.yml");
@@ -215,13 +243,21 @@ router.get("/:name/compose", async (req, res) => {
   });
 });
 
-// Deploy or Update Stack
-router.post("/", async (req, res) => {
+// Deploy or Update Stack — Admin-only: this can launch arbitrary containers
+// (any image, any mount, privileged or not), so it's equivalent to root on
+// the host. Previously had no auth check at all.
+router.post("/", authenticateToken, requireAdmin, async (req, res) => {
   const { name, composeContent } = req.body;
   if (!name || !composeContent) {
     return res
       .status(400)
       .json({ error: "Stack name and composeContent are required" });
+  }
+  if (!isValidStackName(name)) {
+    return res.status(400).json({
+      error:
+        "Stack name may only contain letters, numbers, dots, underscores, and hyphens",
+    });
   }
 
   const stackDir = path.join(STACKS_DIR, name);
@@ -233,9 +269,19 @@ router.post("/", async (req, res) => {
   fs.writeFileSync(composePath, composeContent, "utf-8");
 
   try {
-    const { stdout, stderr } = await execAsync(
-      `docker compose -f "${composePath}" -p "${name}" up -d`,
-    );
+    // execFile passes each argument straight to the `docker` binary — no
+    // shell parses this string, so nothing in `name` or `composePath` can
+    // break out into a second command the way it could with exec()+a
+    // template string.
+    const { stdout, stderr } = await execFileAsync("docker", [
+      "compose",
+      "-f",
+      composePath,
+      "-p",
+      name,
+      "up",
+      "-d",
+    ]);
     res.json({ success: true, stdout, stderr });
   } catch (err) {
     res.status(500).json({
@@ -245,17 +291,30 @@ router.post("/", async (req, res) => {
   }
 });
 
-// Stop / Bring down stack
-router.post("/:name/down", async (req, res) => {
+// Stop / Bring down stack — Admin-only.
+router.post("/:name/down", authenticateToken, requireAdmin, async (req, res) => {
   const { name } = req.params;
+  if (!isValidStackName(name)) {
+    return res.status(400).json({ error: "Invalid stack name" });
+  }
+
   const stackDir = path.join(STACKS_DIR, name);
   const composePath = path.join(stackDir, "docker-compose.yml");
 
   try {
     if (fs.existsSync(composePath)) {
-      await execAsync(`docker compose -f "${composePath}" -p "${name}" down`);
+      await execFileAsync("docker", [
+        "compose",
+        "-f",
+        composePath,
+        "-p",
+        name,
+        "down",
+      ]);
     } else {
-      await execAsync(`docker compose -p "${name}" down`).catch(() => {});
+      await execFileAsync("docker", ["compose", "-p", name, "down"]).catch(
+        () => {},
+      );
     }
     res.json({ success: true });
   } catch (err) {
@@ -265,18 +324,29 @@ router.post("/:name/down", async (req, res) => {
   }
 });
 
-// Delete Stack & Files
-router.delete("/:name", async (req, res) => {
+// Delete Stack & Files — Admin-only.
+router.delete("/:name", authenticateToken, requireAdmin, async (req, res) => {
   const { name } = req.params;
+  if (!isValidStackName(name)) {
+    return res.status(400).json({ error: "Invalid stack name" });
+  }
+
   const stackDir = path.join(STACKS_DIR, name);
   const composePath = path.join(stackDir, "docker-compose.yml");
 
   try {
     if (fs.existsSync(composePath)) {
-      await execAsync(`docker compose -f "${composePath}" -p "${name}" down`);
+      await execFileAsync("docker", [
+        "compose",
+        "-f",
+        composePath,
+        "-p",
+        name,
+        "down",
+      ]);
       fs.rmSync(stackDir, { recursive: true, force: true });
     } else {
-      await execAsync(`docker stack rm "${name}"`).catch(() => {});
+      await execFileAsync("docker", ["stack", "rm", name]).catch(() => {});
     }
     res.json({ success: true });
   } catch (err) {

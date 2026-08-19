@@ -6,13 +6,22 @@ services:
     ports:
       - "3333:3000"
     volumes:
-      # Mount host Docker socket read-only to monitor running containers
+      # Mount host Docker socket to monitor and control running containers
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock
       - /usr/bin/tailscale:/usr/bin/tailscale:ro
       - /:/host:ro
-      # Add database persistence directory
+      # This is the ONLY path the app actually writes persistent data to
+      # (users, settings, custom services, stacks, generated JWT secret).
+      # It matches server/config/constants.js's DATA_DIR — if you change
+      # one, change the other. (The old second `./data:/app/data` mount
+      # pointed at a path the app never wrote to, so nothing was actually
+      # being persisted there — removed.)
       - ./data:/app/server/data
-      - ./data:/app/data
     environment:
       - NODE_ENV=production
+      # Optional but recommended: without this, a random secret is
+      # generated on first boot and saved into ./data/.jwt_secret. Setting
+      # it explicitly here keeps it stable even if that file is ever lost,
+      # and lets you run multiple replicas that trust the same tokens.
+      # - JWT_SECRET=replace-with-a-long-random-string

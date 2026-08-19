@@ -219,7 +219,11 @@ export function Manage({
   const handleContainerAction = async (service, action) => {
     setActionLoadingMap((prev) => ({ ...prev, [`${service.id}-${action}`]: true }))
     try {
-      const res = await fetch(`/api/containers/${service.id}/${action}`, { method: "POST" })
+      const token = localStorage.getItem("homelab_token")
+      const res = await fetch(`/api/containers/${service.id}/${action}`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
       if (res.ok && onRefresh) {
         await onRefresh()
       }

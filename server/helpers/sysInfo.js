@@ -1,9 +1,15 @@
 import fs from "fs";
 import os from "os";
-import { exec } from "child_process";
+import { exec, execFile } from "child_process";
 import { promisify } from "util";
 
 export const execAsync = promisify(exec);
+
+// Runs a binary directly with an argv array — no shell involved, so
+// arguments can never be interpreted as shell metacharacters. Use this
+// instead of execAsync whenever any part of the command comes from a
+// request (stack names, paths, etc.).
+export const execFileAsync = promisify(execFile);
 
 export const formatSize = (gb) =>
   gb >= 1000 ? `${(gb / 1024).toFixed(1)} TB` : `${gb.toFixed(1)} GB`;

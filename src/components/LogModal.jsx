@@ -11,10 +11,13 @@ export function LogModal({ container, onClose }) {
     if (!container) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/containers/${id}/logs`);
+      const token = localStorage.getItem("homelab_token");
+      const res = await fetch(`/api/containers/${container.id}/logs`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       const text = await res.text();
       setLogs(text);
-    } catch (err) {
+    } catch {
       setLogs("Error connecting to server to retrieve logs.");
     } finally {
       setLoading(false);

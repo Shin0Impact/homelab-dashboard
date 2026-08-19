@@ -59,7 +59,10 @@ export function StatCards({
   useEffect(() => {
     const fetchServices = async () => {
       try {
-        const res = await fetch("/api/services-telemetry");
+        const token = localStorage.getItem("homelab_token");
+        const res = await fetch("/api/services-telemetry", {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         if (res.ok) {
           const data = await res.json();
           dispatch(setServicesTelemetry(data));

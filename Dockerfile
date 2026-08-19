@@ -19,5 +19,5 @@ COPY server ./server
 COPY --from=build-frontend /app/dist ./dist
 
 ENV NODE_ENV=production
-EXPOSE 3333
+EXPOSE 3000
 CMD ["node", "server/index.js"]

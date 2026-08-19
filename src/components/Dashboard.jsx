@@ -14,9 +14,14 @@ export function Dashboard({ services = [], onRefresh }) {
 
   const isCompact = useCompactMode()
 
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem("homelab_token")
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  }
+
   const fetchTailscaleStatus = async () => {
     try {
-      const res = await fetch("/api/tailscale")
+      const res = await fetch("/api/tailscale", { headers: getAuthHeaders() })
       if (res.ok) {
         const data = await res.json()
         setTailscale({ ...data, loading: false })
@@ -28,7 +33,7 @@ export function Dashboard({ services = [], onRefresh }) {
 
   const fetchStorageStatus = async () => {
     try {
-      const res = await fetch("/api/storage")
+      const res = await fetch("/api/storage", { headers: getAuthHeaders() })
       if (res.ok) {
         const data = await res.json()
         setStorage({ ...data, loading: false })
@@ -40,7 +45,7 @@ export function Dashboard({ services = [], onRefresh }) {
 
   const fetchServicesTelemetry = async () => {
     try {
-      const res = await fetch("/api/services-telemetry")
+      const res = await fetch("/api/services-telemetry", { headers: getAuthHeaders() })
       if (res.ok) {
         const data = await res.json()
         setServicesTelemetry(data)
@@ -81,7 +86,10 @@ export function Dashboard({ services = [], onRefresh }) {
     setLoadingMap((prev) => ({ ...prev, [service.id]: true }))
 
     try {
-      const res = await fetch(`/api/containers/${service.id}/${action}`, { method: "POST" })
+      const res = await fetch(`/api/containers/${service.id}/${action}`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+      })
       if (res.ok && onRefresh) {
         await onRefresh()
       }

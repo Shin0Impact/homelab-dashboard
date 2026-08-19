@@ -22,7 +22,16 @@ initStorage();
 
 const app = express();
 
-app.use(cors());
+// CORS is only needed in development, where the Vite dev server (5173) calls
+// the API on a different port. In production the built frontend is served
+// from this same Express process/origin, so there's nothing to allow across
+// origins — leaving cors() wide open in prod let any website's JS call the
+// API cross-origin. (The real backstop against that is requiring auth on
+// every state-changing route — see the route files — but there's no reason
+// to also leave the door open here.)
+if (process.env.NODE_ENV !== "production") {
+  app.use(cors());
+}
 app.use(express.json());
 
 // API Routers

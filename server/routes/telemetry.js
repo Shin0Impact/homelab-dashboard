@@ -1,8 +1,10 @@
 import express from "express";
 import os from "os";
+import si from "systeminformation";
 import { docker } from "../helpers/dockerUtils.js";
 import { execAsync, getStorageStats, getCpuUsage } from "../helpers/sysInfo.js";
 import { getServicesTelemetry } from "../helpers/serviceMonitors.js";
+import { authenticateToken } from "./auth.js";
 
 const router = express.Router();
 
@@ -20,7 +22,9 @@ setInterval(() => {
   );
 }, 2000);
 
-router.get("/services-telemetry", async (req, res) => {
+// Telemetry reveals container names, resource usage, and network topology —
+// all of these routes now require login (previously none of them did).
+router.get("/services-telemetry", authenticateToken, async (req, res) => {
   try {
     const servicesStats = await getServicesTelemetry();
     res.json(servicesStats);
@@ -29,7 +33,7 @@ router.get("/services-telemetry", async (req, res) => {
   }
 });
 
-router.get("/tailscale", async (req, res) => {
+router.get("/tailscale", authenticateToken, async (req, res) => {
   try {
     const { stdout } = await execAsync("tailscale status --json");
     const status = JSON.parse(stdout);
@@ -47,12 +51,31 @@ router.get("/tailscale", async (req, res) => {
   }
 });
 
-router.get("/storage", async (req, res) => {
+router.get("/storage", authenticateToken, async (req, res) => {
   const stats = await getStorageStats();
   res.json(stats);
 });
 
-router.get("/telemetry", async (req, res) => {
+// Real network throughput via `systeminformation` — this used to be
+// Math.random(), so the download/upload graph never reflected the actual
+// host at all. si.networkStats() reports bytes/sec since its last call, so
+// the numbers settle in after the first couple of polls.
+async function getNetworkThroughputKBs() {
+  try {
+    const netStats = await si.networkStats();
+    const totalRxSec = netStats.reduce((sum, n) => sum + (n.rx_sec || 0), 0);
+    const totalTxSec = netStats.reduce((sum, n) => sum + (n.tx_sec || 0), 0);
+    return {
+      down: Math.round((totalRxSec / 1024) * 10) / 10,
+      up: Math.round((totalTxSec / 1024) * 10) / 10,
+    };
+  } catch (err) {
+    console.error("Network stats error:", err.message);
+    return { down: 0, up: 0 };
+  }
+}
+
+router.get("/telemetry", authenticateToken, async (req, res) => {
   res.setHeader("Content-Type", "application/json");
 
   try {
@@ -118,6 +141,8 @@ router.get("/telemetry", async (req, res) => {
 
     processList.sort((a, b) => b.cpu - a.cpu || b.memValue - a.memValue);
 
+    const net = await getNetworkThroughputKBs();
+
     res.json({
       timestamp: new Date().toLocaleTimeString([], {
         hour: "2-digit",
@@ -126,10 +151,7 @@ router.get("/telemetry", async (req, res) => {
       }),
       cpuLoad: currentCpuPercent,
       ram: ramBreakdown,
-      net: {
-        down: Math.floor(Math.random() * 400) + 50,
-        up: Math.floor(Math.random() * 120) + 15,
-      },
+      net,
       totalMemGB,
       usedMemGB,
       freeMemGB,
