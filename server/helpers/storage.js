@@ -1,6 +1,4 @@
 import fs from "fs";
-import crypto from "crypto";
-import bcrypt from "bcryptjs";
 import {
   DATA_FILE,
   USERS_FILE,
@@ -33,29 +31,7 @@ export function saveCustomServices(data) {
 export function getUsers() {
   try {
     if (!fs.existsSync(USERS_FILE)) {
-      // No hardcoded default password — a public repo can't ship a known
-      // credential. Generate a random one, print it once, and require it be
-      // changed like any other freshly-provisioned account.
-      const generatedPassword = crypto.randomBytes(9).toString("base64url");
-      const defaultUsers = [
-        {
-          id: "1",
-          username: "admin",
-          passwordHash: bcrypt.hashSync(generatedPassword, 10),
-          role: "Admin",
-        },
-      ];
-      fs.writeFileSync(USERS_FILE, JSON.stringify(defaultUsers, null, 2));
-      console.warn(
-        "\n==============================================================\n" +
-          " First run: created the default admin account\n" +
-          "   username: admin\n" +
-          `   password: ${generatedPassword}\n` +
-          " This password is shown only once here in the logs — save it now,\n" +
-          " or change it from Settings > Users after logging in.\n" +
-          "==============================================================\n",
-      );
-      return defaultUsers;
+      return [];
     }
     return JSON.parse(fs.readFileSync(USERS_FILE, "utf-8"));
   } catch {

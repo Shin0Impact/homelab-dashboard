@@ -25,10 +25,7 @@ dist-ssr
 
 
 # Local Runtime & Persistent Data
-server/custom_services.json
-custom_services.json
-users.json
-stacks/
+server/data/
 *.db
 *.sqlite
 

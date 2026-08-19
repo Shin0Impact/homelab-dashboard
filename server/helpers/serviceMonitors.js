@@ -240,7 +240,7 @@ export async function getServicesTelemetry() {
     telemetry.qbittorrent = {
       label: "qBittorrent",
       detail: fallback?.online ? "Container Active" : "Offline",
-      status: fallback?.online ? "offline" : "offline",
+      status: fallback?.online ? "online" : "offline",
     };
   }
 

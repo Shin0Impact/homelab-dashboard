@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from "react-redux"
 import { updateTelemetryData, setTelemetryError } from "./store/telemetrySlice"
 import { Dashboard } from "./components/Dashboard"
 import { Login } from "./components/Login"
+import { Setup } from "./components/Setup"
 import { Manage } from "./components/Manage"
 import { Stacks } from "./components/Stacks"
 import { Metrics } from "./components/Metrics"
@@ -32,6 +33,27 @@ export default function App() {
   const [page, setPage] = useState("dashboard")
   const [services, setServices] = useState([])
   const [categories, setCategories] = useState([])
+
+  // Whether an admin account exists yet: null = still checking, true/false
+  // once we know. Checked once on load, only matters while logged out.
+  const [setupRequired, setSetupRequired] = useState(null)
+
+  useEffect(() => {
+    if (authed) return
+    let cancelled = false
+    fetch("/api/setup-status")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) setSetupRequired(Boolean(data.setupRequired))
+      })
+      .catch(() => {
+        // If we can't tell, default to the login form rather than getting stuck.
+        if (!cancelled) setSetupRequired(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [authed])
 
   // Store favorite service IDs in localStorage so polling doesn't overwrite them
   const [favoriteIds, setFavoriteIds] = useState(() => {
@@ -215,7 +237,18 @@ export default function App() {
   }
 
   if (!authed) {
-    return <Login onSignIn={handleLogin} />
+    if (setupRequired === null) {
+      return (
+        <div className="flex min-h-svh items-center justify-center bg-background">
+          <div className="text-sm text-muted-foreground">Loading...</div>
+        </div>
+      )
+    }
+    return setupRequired ? (
+      <Setup onRegistered={handleLogin} />
+    ) : (
+      <Login onSignIn={handleLogin} />
+    )
   }
 
   const meta = PAGE_META[page] || PAGE_META.dashboard
