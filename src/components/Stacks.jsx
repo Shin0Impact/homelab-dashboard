@@ -1,21 +1,18 @@
 import React, { useState } from "react"
 import { Layers, Play, Square, FileCode, Plus, Search, AlertCircle, X } from "lucide-react"
 
-// Semantic glass card style that dynamically adapts to light, dark, and AMOLED modes
 const glass = "border border-border bg-card text-card-foreground backdrop-blur-xl shadow-sm transition-colors"
 
 export function Stacks({ services = [], onRefresh, onDeployStack }) {
   const [search, setSearch] = useState("")
   const [selectedStack, setSelectedStack] = useState(null)
   
-  // Deploy / Add Stack Modal State
   const [isDeployOpen, setIsDeployOpen] = useState(false)
   const [stackNameInput, setStackNameInput] = useState("")
   const [composeContent, setComposeContent] = useState("")
 
   const safeServices = Array.isArray(services) ? services : []
 
-  // Group individual containers by Docker Compose project label or stack attribute
   const stacksMap = safeServices.reduce((acc, container) => {
     const stackName =
       container.stack ||
@@ -59,16 +56,18 @@ export function Stacks({ services = [], onRefresh, onDeployStack }) {
   }
 
   return (
-    <div className="min-h-full w-full p-6 space-y-6 text-foreground">
-      {/* Header Controls */}
+    <div className="min-h-full w-full p-4 sm:p-6 md:p-8 space-y-6 text-foreground">
+      {/* Header Bar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-foreground">Docker Stacks</h2>
-          <p className="text-xs text-muted-foreground">Manage stack deployments and Compose environments</p>
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl font-bold tracking-tight text-foreground">Docker Stacks</h2>
+          <span className="rounded-full bg-secondary/80 px-2.5 py-0.5 text-xs font-medium text-muted-foreground border border-white/5">
+            {filteredStacks.length} Stacks
+          </span>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="relative flex-1 sm:w-64">
+        <div className="flex flex-1 items-center justify-end gap-3 sm:max-w-md">
+          <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
               type="text"
@@ -80,7 +79,7 @@ export function Stacks({ services = [], onRefresh, onDeployStack }) {
           </div>
           <button
             onClick={() => setIsDeployOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 rounded-xl text-xs font-semibold transition-colors shrink-0"
+            className="flex items-center gap-2 shrink-0 px-3.5 py-1.5 bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 rounded-xl text-xs font-semibold transition-colors"
           >
             <Plus className="h-4 w-4" /> Deploy Stack
           </button>

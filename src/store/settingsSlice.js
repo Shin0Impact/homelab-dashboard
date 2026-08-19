@@ -6,9 +6,9 @@ const loadInitialSettings = () => {
   try {
     const savedCat = localStorage.getItem("homelab_categories");
     const savedTheme = localStorage.getItem("homelab_theme");
+    const savedServices = localStorage.getItem("homelab_custom_services");
     const legacyAmoled = localStorage.getItem("homelab_amoled") === "true";
 
-    // Migrate old amoled toggle to theme string
     let initialTheme = savedTheme || "default";
     if (!savedTheme && legacyAmoled) {
       initialTheme = "amoled";
@@ -17,8 +17,9 @@ const loadInitialSettings = () => {
     return {
       categories: savedCat ? JSON.parse(savedCat) : DEFAULT_CATEGORIES,
       compact: localStorage.getItem("homelab_compact") === "true",
-      theme: initialTheme, // "default" | "amoled" | "light"
+      theme: initialTheme,
       refresh: Number(localStorage.getItem("homelab_refresh")) || 10,
+      customServices: savedServices ? JSON.parse(savedServices) : [],
     };
   } catch {
     return {
@@ -26,6 +27,7 @@ const loadInitialSettings = () => {
       compact: false,
       theme: "default",
       refresh: 10,
+      customServices: [],
     };
   }
 };
@@ -35,7 +37,8 @@ const settingsSlice = createSlice({
   initialState: loadInitialSettings(),
   reducers: {
     setSettings: (state, action) => {
-      const { categories, compact, theme, amoled, refresh } = action.payload;
+      const { categories, compact, theme, amoled, refresh, customServices } =
+        action.payload;
       if (categories) {
         state.categories = categories;
         localStorage.setItem("homelab_categories", JSON.stringify(categories));
@@ -48,7 +51,6 @@ const settingsSlice = createSlice({
         state.theme = theme;
         localStorage.setItem("homelab_theme", theme);
       } else if (amoled !== undefined) {
-        // Fallback migration if server returns legacy amoled payload
         state.theme = amoled ? "amoled" : "default";
         localStorage.setItem("homelab_theme", state.theme);
       }
@@ -56,6 +58,36 @@ const settingsSlice = createSlice({
         state.refresh = refresh;
         localStorage.setItem("homelab_refresh", refresh);
       }
+      if (customServices !== undefined) {
+        state.customServices = customServices;
+        localStorage.setItem(
+          "homelab_custom_services",
+          JSON.stringify(customServices),
+        );
+      }
+    },
+    setCustomServices: (state, action) => {
+      state.customServices = action.payload;
+      localStorage.setItem(
+        "homelab_custom_services",
+        JSON.stringify(action.payload),
+      );
+    },
+    addCustomService: (state, action) => {
+      state.customServices.push(action.payload);
+      localStorage.setItem(
+        "homelab_custom_services",
+        JSON.stringify(state.customServices),
+      );
+    },
+    removeCustomService: (state, action) => {
+      state.customServices = state.customServices.filter(
+        (s) => s.id !== action.payload,
+      );
+      localStorage.setItem(
+        "homelab_custom_services",
+        JSON.stringify(state.customServices),
+      );
     },
     setCategories: (state, action) => {
       state.categories = action.payload;
@@ -97,17 +129,22 @@ const settingsSlice = createSlice({
       state.compact = false;
       state.theme = "default";
       state.refresh = 10;
+      state.customServices = [];
       localStorage.removeItem("homelab_categories");
       localStorage.removeItem("homelab_compact");
       localStorage.removeItem("homelab_theme");
       localStorage.removeItem("homelab_amoled");
       localStorage.removeItem("homelab_refresh");
+      localStorage.removeItem("homelab_custom_services");
     },
   },
 });
 
 export const {
   setSettings,
+  setCustomServices,
+  addCustomService,
+  removeCustomService,
   setCategories,
   addCategory,
   removeCategory,

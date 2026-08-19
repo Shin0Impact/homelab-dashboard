@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react"
+import React, { useMemo, useState, useRef } from "react"
 import { useSelector, useDispatch } from "react-redux"
 import { setTelemetryError, updateTelemetryData } from "../store/telemetrySlice"
 import {
@@ -9,8 +9,10 @@ import {
   Network,
   Play,
   RefreshCw,
+  RotateCw,
   Square,
   Terminal,
+  X,
 } from "lucide-react"
 import {
   Area,
@@ -71,6 +73,8 @@ export function Metrics() {
     useSelector((state) => state.telemetry)
 
   const [sortConfig, setSortConfig] = useState({ key: "cpu", direction: "desc" })
+  const [activeMobileProc, setActiveMobileProc] = useState(null)
+  const timerRef = useRef(null)
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem("homelab_token")
@@ -90,20 +94,28 @@ export function Metrics() {
     }
   }
 
-  const handleToggleProcess = async (id) => {
-    const proc = processes.find((p) => p.id === id)
-    if (!proc) return
-    const action = proc.status === "running" ? "stop" : "start"
-
+  const handleContainerAction = async (id, action) => {
     try {
       await fetch(`/api/containers/${id}/${action}`, {
         method: "POST",
         headers: getAuthHeaders(),
       })
+      setActiveMobileProc(null)
       fetchMetrics()
     } catch (e) {
       console.error(e)
     }
+  }
+
+  // Mobile Long Press Logic
+  const handleTouchStart = (proc) => {
+    timerRef.current = setTimeout(() => {
+      setActiveMobileProc(proc)
+    }, 500)
+  }
+
+  const handleTouchEnd = () => {
+    if (timerRef.current) clearTimeout(timerRef.current)
   }
 
   const handleSort = (key) => {
@@ -223,12 +235,14 @@ export function Metrics() {
         </div>
       </ChartCard>
 
-      {/* --- TASK MANAGER TABLE (RESPONSIVE) --- */}
+      {/* --- TASK MANAGER TABLE --- */}
       <div className="space-y-4 pt-2">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base font-semibold tracking-tight">Task Manager</h2>
-            <p className="text-xs text-muted-foreground">Active container processes & resource load</p>
+            <p className="text-xs text-muted-foreground">
+              Active processes & resource load <span className="sm:hidden">(Press & hold for controls)</span>
+            </p>
           </div>
           <button
             onClick={fetchMetrics}
@@ -267,8 +281,13 @@ export function Metrics() {
             </thead>
             <tbody>
               {sortedProcesses.map((p) => (
-                <tr key={p.id} className="border-b border-white/5 last:border-0 hover:bg-secondary/30">
-                  {/* Container Name */}
+                <tr
+                  key={p.id}
+                  onTouchStart={() => handleTouchStart(p)}
+                  onTouchEnd={handleTouchEnd}
+                  onTouchMove={handleTouchEnd}
+                  className="border-b border-white/5 last:border-0 hover:bg-secondary/30 select-none"
+                >
                   <td className="px-3 sm:px-5 py-3 font-medium">
                     <div className="flex items-center gap-2 max-w-[120px] sm:max-w-none truncate">
                       <Terminal className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -276,22 +295,18 @@ export function Metrics() {
                     </div>
                   </td>
 
-                  {/* PID (Desktop Only) */}
                   <td className="hidden sm:table-cell px-5 py-3 font-mono text-xs text-muted-foreground">
                     {p.pid}
                   </td>
 
-                  {/* CPU Usage */}
                   <td className="px-3 sm:px-5 py-3 font-mono text-xs text-cyan-400 font-semibold">
                     {p.cpu ?? 0}%
                   </td>
 
-                  {/* Memory Usage */}
                   <td className="px-3 sm:px-5 py-3 font-mono text-xs text-purple-400">
                     {p.mem ?? "0 MB"}
                   </td>
 
-                  {/* Status Badge */}
                   <td className="px-3 sm:px-5 py-3">
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] sm:text-[11px] font-medium ${
@@ -304,26 +319,32 @@ export function Metrics() {
                     </span>
                   </td>
 
-                  {/* Action Button (Desktop Only) */}
+                  {/* Desktop Actions */}
                   <td className="hidden sm:table-cell px-5 py-3 text-right">
-                    <button
-                      onClick={() => handleToggleProcess(p.id)}
-                      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                        p.status === "running"
-                          ? "bg-red-500/10 text-red-400 hover:bg-red-500/20"
-                          : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
-                      }`}
-                    >
+                    <div className="flex items-center justify-end gap-1.5">
                       {p.status === "running" ? (
-                        <>
-                          <Square className="h-3 w-3" /> Stop
-                        </>
+                        <button
+                          onClick={() => handleContainerAction(p.id, "stop")}
+                          className="inline-flex items-center gap-1 rounded-lg bg-rose-500/10 px-2.5 py-1 text-xs font-medium text-rose-400 hover:bg-rose-500/20"
+                        >
+                          <Square className="h-3 w-3 fill-current" /> Stop
+                        </button>
                       ) : (
-                        <>
-                          <Play className="h-3 w-3" /> Start
-                        </>
+                        <button
+                          onClick={() => handleContainerAction(p.id, "start")}
+                          className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400 hover:bg-emerald-500/20"
+                        >
+                          <Play className="h-3 w-3 fill-current" /> Start
+                        </button>
                       )}
-                    </button>
+                      <button
+                        onClick={() => handleContainerAction(p.id, "restart")}
+                        title="Restart Container"
+                        className="inline-flex items-center gap-1 rounded-lg bg-secondary/60 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                      >
+                        <RotateCw className="h-3 w-3" /> Restart
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -331,6 +352,51 @@ export function Metrics() {
           </table>
         </div>
       </div>
+
+      {/* Mobile Long Press Action Menu Modal */}
+      {activeMobileProc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:hidden">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setActiveMobileProc(null)}
+          />
+          <div className={`relative w-full max-w-xs rounded-2xl p-5 ${glass} space-y-4`}>
+            <div className="flex items-center justify-between border-b border-white/5 pb-2">
+              <h3 className="font-semibold text-sm">{activeMobileProc.name}</h3>
+              <button
+                onClick={() => setActiveMobileProc(null)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {activeMobileProc.status === "running" ? (
+                <button
+                  onClick={() => handleContainerAction(activeMobileProc.id, "stop")}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-rose-500/15 py-2.5 text-xs font-medium text-rose-400"
+                >
+                  <Square className="h-3.5 w-3.5 fill-current" /> Stop Process
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleContainerAction(activeMobileProc.id, "start")}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-emerald-500/15 py-2.5 text-xs font-medium text-emerald-400"
+                >
+                  <Play className="h-3.5 w-3.5 fill-current" /> Start Process
+                </button>
+              )}
+              <button
+                onClick={() => handleContainerAction(activeMobileProc.id, "restart")}
+                className="flex items-center justify-center gap-2 rounded-xl bg-secondary py-2.5 text-xs font-medium text-foreground"
+              >
+                <RotateCw className="h-3.5 w-3.5" /> Restart Process
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
