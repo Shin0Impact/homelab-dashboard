@@ -7,6 +7,7 @@ import { execAsync } from "../helpers/sysInfo.js";
 
 const router = express.Router();
 
+// List all stacks (running containers + local directories)
 router.get("/", async (req, res) => {
   try {
     const rawContainers = await docker.listContainers({ all: true });
@@ -26,6 +27,7 @@ router.get("/", async (req, res) => {
         id: c.Id,
         name: c.Names[0] ? c.Names[0].replace("/", "") : c.Id.substring(0, 8),
         state: c.State,
+        image: c.Image,
       });
     });
 
@@ -35,27 +37,33 @@ router.get("/", async (req, res) => {
       }
     });
 
-    const localStackDirs = fs
-      .readdirSync(STACKS_DIR, { withFileTypes: true })
-      .filter((dirent) => dirent.isDirectory())
-      .map((dirent) => dirent.name);
+    if (fs.existsSync(STACKS_DIR)) {
+      const localStackDirs = fs
+        .readdirSync(STACKS_DIR, { withFileTypes: true })
+        .filter((dirent) => dirent.isDirectory())
+        .map((dirent) => dirent.name);
 
-    localStackDirs.forEach((dirName) => {
-      if (!stackMap[dirName]) {
-        stackMap[dirName] = {
-          name: dirName,
-          containers: [],
-          status: "stopped",
-        };
-      }
-      const composeFile = path.join(STACKS_DIR, dirName, "docker-compose.yml");
-      if (fs.existsSync(composeFile)) {
-        stackMap[dirName].composeContent = fs.readFileSync(
-          composeFile,
-          "utf-8",
+      localStackDirs.forEach((dirName) => {
+        if (!stackMap[dirName]) {
+          stackMap[dirName] = {
+            name: dirName,
+            containers: [],
+            status: "stopped",
+          };
+        }
+        const composeFile = path.join(
+          STACKS_DIR,
+          dirName,
+          "docker-compose.yml",
         );
-      }
-    });
+        if (fs.existsSync(composeFile)) {
+          stackMap[dirName].composeContent = fs.readFileSync(
+            composeFile,
+            "utf-8",
+          );
+        }
+      });
+    }
 
     res.json(Object.values(stackMap));
   } catch (err) {
@@ -65,6 +73,23 @@ router.get("/", async (req, res) => {
   }
 });
 
+// GET raw compose file for editing/viewing
+router.get("/:name/compose", (req, res) => {
+  const { name } = req.params;
+  const composePath = path.join(STACKS_DIR, name, "docker-compose.yml");
+
+  if (fs.existsSync(composePath)) {
+    const composeContent = fs.readFileSync(composePath, "utf-8");
+    return res.json({ name, composeContent });
+  }
+
+  return res.json({
+    name,
+    composeContent: `# No local docker-compose.yml stored on disk for stack: ${name}\nservices:\n`,
+  });
+});
+
+// Deploy or Update Stack
 router.post("/", async (req, res) => {
   const { name, composeContent } = req.body;
   if (!name || !composeContent) {
@@ -94,6 +119,27 @@ router.post("/", async (req, res) => {
   }
 });
 
+// Stop / Bring down stack
+router.post("/:name/down", async (req, res) => {
+  const { name } = req.params;
+  const stackDir = path.join(STACKS_DIR, name);
+  const composePath = path.join(stackDir, "docker-compose.yml");
+
+  try {
+    if (fs.existsSync(composePath)) {
+      await execAsync(`docker compose -f "${composePath}" -p "${name}" down`);
+    } else {
+      await execAsync(`docker compose -p "${name}" down`).catch(() => {});
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: "Failed to bring down stack", details: err.message });
+  }
+});
+
+// Delete Stack & Files
 router.delete("/:name", async (req, res) => {
   const { name } = req.params;
   const stackDir = path.join(STACKS_DIR, name);
