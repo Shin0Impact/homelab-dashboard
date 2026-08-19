@@ -149,15 +149,6 @@ Start the development server:
 npm run dev
 ```
 
-### Available Scripts
-
-| Command           | Description                                  |
-| ----------------- | -------------------------------------------- |
-| `npm run dev`     | Starts the Vite development server with HMR. |
-| `npm run build`   | Builds the application for production.       |
-| `npm run preview` | Locally previews the production build.       |
-| `npm run lint`    | Runs Oxlint rules.                           |
-
 ## Contributing
 
 Contributions are welcome. Please open an issue to discuss significant changes before submitting a pull request.
