@@ -67,7 +67,6 @@ function ChartCard({ title, subtitle, icon: Icon, children }) {
 export function Metrics() {
   const dispatch = useDispatch()
   
-  // Select telemetry directly from Redux Store
   const { cpuHistory, netHistory, ramData, totalRam, processes, errorMsg } =
     useSelector((state) => state.telemetry)
 
@@ -224,7 +223,7 @@ export function Metrics() {
         </div>
       </ChartCard>
 
-      {/* --- TASK MANAGER --- */}
+      {/* --- TASK MANAGER TABLE (RESPONSIVE) --- */}
       <div className="space-y-4 pt-2">
         <div className="flex items-center justify-between">
           <div>
@@ -240,47 +239,62 @@ export function Metrics() {
         </div>
 
         <div className={`overflow-hidden rounded-2xl ${glass}`}>
-          <table className="w-full text-left text-sm">
+          <table className="w-full text-left text-xs sm:text-sm">
             <thead>
-              <tr className="border-b border-white/5 text-xs uppercase tracking-wide text-muted-foreground select-none">
+              <tr className="border-b border-white/5 uppercase tracking-wide text-muted-foreground select-none">
                 <th
                   onClick={() => handleSort("name")}
-                  className="px-5 py-3 font-medium cursor-pointer hover:text-foreground"
+                  className="px-3 sm:px-5 py-3 font-medium cursor-pointer hover:text-foreground"
                 >
-                  Process / Container {renderSortIndicator("name")}
+                  Process {renderSortIndicator("name")}
                 </th>
-                <th className="px-5 py-3 font-medium">PID</th>
+                <th className="hidden sm:table-cell px-5 py-3 font-medium">PID</th>
                 <th
                   onClick={() => handleSort("cpu")}
-                  className="px-5 py-3 font-medium cursor-pointer hover:text-foreground"
+                  className="px-3 sm:px-5 py-3 font-medium cursor-pointer hover:text-foreground"
                 >
-                  CPU Usage {renderSortIndicator("cpu")}
+                  CPU {renderSortIndicator("cpu")}
                 </th>
                 <th
                   onClick={() => handleSort("mem")}
-                  className="px-5 py-3 font-medium cursor-pointer hover:text-foreground"
+                  className="px-3 sm:px-5 py-3 font-medium cursor-pointer hover:text-foreground"
                 >
-                  Memory {renderSortIndicator("mem")}
+                  RAM {renderSortIndicator("mem")}
                 </th>
-                <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 text-right font-medium">Action</th>
+                <th className="px-3 sm:px-5 py-3 font-medium">Status</th>
+                <th className="hidden sm:table-cell px-5 py-3 text-right font-medium">Action</th>
               </tr>
             </thead>
             <tbody>
               {sortedProcesses.map((p) => (
                 <tr key={p.id} className="border-b border-white/5 last:border-0 hover:bg-secondary/30">
-                  <td className="px-5 py-3 font-medium">
-                    <div className="flex items-center gap-2">
-                      <Terminal className="h-4 w-4 text-muted-foreground" />
-                      {p.name}
+                  {/* Container Name */}
+                  <td className="px-3 sm:px-5 py-3 font-medium">
+                    <div className="flex items-center gap-2 max-w-[120px] sm:max-w-none truncate">
+                      <Terminal className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{p.name}</span>
                     </div>
                   </td>
-                  <td className="px-5 py-3 font-mono text-xs text-muted-foreground">{p.pid}</td>
-                  <td className="px-5 py-3 font-mono text-xs text-cyan-400 font-semibold">{p.cpu ?? 0}%</td>
-                  <td className="px-5 py-3 font-mono text-xs text-purple-400">{p.mem ?? "0 MB"}</td>
-                  <td className="px-5 py-3">
+
+                  {/* PID (Desktop Only) */}
+                  <td className="hidden sm:table-cell px-5 py-3 font-mono text-xs text-muted-foreground">
+                    {p.pid}
+                  </td>
+
+                  {/* CPU Usage */}
+                  <td className="px-3 sm:px-5 py-3 font-mono text-xs text-cyan-400 font-semibold">
+                    {p.cpu ?? 0}%
+                  </td>
+
+                  {/* Memory Usage */}
+                  <td className="px-3 sm:px-5 py-3 font-mono text-xs text-purple-400">
+                    {p.mem ?? "0 MB"}
+                  </td>
+
+                  {/* Status Badge */}
+                  <td className="px-3 sm:px-5 py-3">
                     <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] sm:text-[11px] font-medium ${
                         p.status === "running"
                           ? "bg-emerald-500/10 text-emerald-400"
                           : "bg-red-500/10 text-red-400"
@@ -289,7 +303,9 @@ export function Metrics() {
                       {p.status}
                     </span>
                   </td>
-                  <td className="px-5 py-3 text-right">
+
+                  {/* Action Button (Desktop Only) */}
+                  <td className="hidden sm:table-cell px-5 py-3 text-right">
                     <button
                       onClick={() => handleToggleProcess(p.id)}
                       className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${

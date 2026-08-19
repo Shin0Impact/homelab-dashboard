@@ -49,16 +49,13 @@ export function StatCards({
   const dispatch = useDispatch();
   const [isHoveredStorage, setIsHoveredStorage] = useState(false);
 
-  // Redux state selector
   const storeTelemetry = useSelector((state) => state.telemetry.servicesTelemetry);
 
-  // Merge default structures with incoming telemetry
   const servicesTelemetry = {
     ...DEFAULT_SERVICES,
     ...storeTelemetry,
   };
 
-  // Poll service telemetry endpoint every 5s
   useEffect(() => {
     const fetchServices = async () => {
       try {
@@ -68,7 +65,7 @@ export function StatCards({
           dispatch(setServicesTelemetry(data));
         }
       } catch {
-        // Silently retain cached telemetry on fetch failure
+        // Silently retain cached telemetry
       }
     };
 
@@ -116,11 +113,12 @@ export function StatCards({
           </div>
         </div>
 
-        {/* Storage */}
+        {/* Storage: Works on Hover (Desktop) AND Tap (Mobile) */}
         <div
           className={`group flex flex-col justify-between rounded-xl transition-all duration-200 cursor-pointer ${isCompact ? "h-28 p-2.5" : "h-32 p-4"} ${glass} hover:border-amber-500/30`}
           onMouseEnter={() => setIsHoveredStorage(true)}
           onMouseLeave={() => setIsHoveredStorage(false)}
+          onClick={() => setIsHoveredStorage((prev) => !prev)}
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Storage</span>
@@ -137,7 +135,9 @@ export function StatCards({
               <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                 <span className="truncate">of {storage.totalFormatted} pool</span>
                 {storage.drives && storage.drives.length > 0 && (
-                  <span className="text-[10px] font-medium text-amber-400/80 group-hover:text-amber-300">(Hover details)</span>
+                  <span className="text-[10px] font-medium text-amber-400/80 group-hover:text-amber-300">
+                    (Tap/Hover)
+                  </span>
                 )}
               </div>
             </div>
