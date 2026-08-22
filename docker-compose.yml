@@ -3,8 +3,16 @@ services:
     build: .
     container_name: homelab-dashboard
     restart: unless-stopped
-    ports:
-      - "3333:3000"
+    # Host networking, not a published port: the container shares the
+    # host's network namespace directly. This is what makes the network
+    # throughput graph read real host interfaces (eth0/wlan0) instead of
+    # the container's own private virtual interface, which is all it could
+    # ever see under Docker's default bridge networking. Trade-off: the
+    # container can now reach (and be reached on) any host port, not just
+    # one you've explicitly published — normal for this class of tool
+    # (same trade node_exporter/Portainer-style agents make), but worth
+    # knowing since it's a step up in network trust from bridge mode.
+    network_mode: host
     volumes:
       # Mount host Docker socket to monitor and control running containers
       - /var/run/docker.sock:/var/run/docker.sock
@@ -20,6 +28,12 @@ services:
       - ./data:/app/server/data
     environment:
       - NODE_ENV=production
+      # With network_mode: host there's no more host:container port
+      # translation — the app binds straight to this port on the host, so
+      # this is now what actually decides the port (not a `ports:` line,
+      # which network_mode: host ignores). Set to 3333 to keep the same
+      # URL you were already using.
+      - PORT=3333
       # Optional but recommended: without this, a random secret is
       # generated on first boot and saved into ./data/.jwt_secret. Setting
       # it explicitly here keeps it stable even if that file is ever lost,

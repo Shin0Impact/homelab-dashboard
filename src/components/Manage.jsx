@@ -385,26 +385,44 @@ export function Manage({
             </p>
           ) : (
             <div className="mt-3 space-y-2">
-              {hiddenServices.map((s) => (
-                <div
-                  key={s.id}
-                  className="flex items-center justify-between rounded-lg border border-white/5 bg-secondary/30 px-3 py-2"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-secondary/70 ring-1 ring-white/5">
-                      <ServiceIcon service={s} className="h-4 w-4" />
-                    </span>
-                    <span className="text-sm font-medium">{s.name}</span>
-                    <StatusDot online={s.online} />
-                  </div>
-                  <button
-                    onClick={() => handleUnhide(s)}
-                    className="flex items-center gap-1.5 rounded-lg bg-primary/15 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/25"
+              {hiddenServices.map((s) => {
+                const launchUrl = getLaunchUrl(s)
+                return (
+                  <div
+                    key={s.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-secondary/30 px-3 py-2"
                   >
-                    <Eye className="h-3.5 w-3.5" /> Unhide
-                  </button>
-                </div>
-              ))}
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary/70 ring-1 ring-white/5">
+                        <ServiceIcon service={s} className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-sm font-medium">{s.name}</span>
+                          <StatusDot online={s.online} />
+                          {!s.isCustom && s.category && <CategoryTag category={s.category} />}
+                        </div>
+                        <p className="truncate font-mono text-[11px] text-muted-foreground">
+                          {[
+                            s.containerName && s.containerName !== s.name ? s.containerName : null,
+                            s.stack && s.stack !== "standalone" ? `stack: ${s.stack}` : null,
+                            s.image,
+                            launchUrl,
+                          ]
+                            .filter(Boolean)
+                            .join("  ·  ") || "No additional details"}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleUnhide(s)}
+                      className="flex shrink-0 items-center gap-1.5 rounded-lg bg-primary/15 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/25"
+                    >
+                      <Eye className="h-3.5 w-3.5" /> Unhide
+                    </button>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
