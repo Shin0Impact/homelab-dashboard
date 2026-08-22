@@ -11,9 +11,13 @@ import {
   Play,
   RotateCw,
   Loader2,
+  ExternalLink,
+  EyeOff,
+  Eye,
 } from "lucide-react"
 import { ICONS, CategoryTag, ServiceIcon, StatusDot, glass } from "./UIHelpers"
 import { authFetch } from "../lib/api"
+import { getLaunchUrl } from "../lib/utils"
 
 const ICON_OPTIONS = [
   "container",
@@ -180,9 +184,70 @@ export function Manage({
   const [selectedCategory, setSelectedCategory] = useState("All")
   const [actionLoadingMap, setActionLoadingMap] = useState({})
 
+  const [hiddenServices, setHiddenServices] = useState([])
+  const [showHidden, setShowHidden] = useState(false)
+  const [loadingHidden, setLoadingHidden] = useState(false)
+
   useEffect(() => {
     setLocalServices(initialServices)
   }, [initialServices])
+
+  const fetchHidden = async () => {
+    if (!isAdmin) return
+    setLoadingHidden(true)
+    try {
+      const res = await authFetch("/api/services/hidden")
+      if (res.ok) {
+        const data = await res.json()
+        setHiddenServices(data.services || [])
+      }
+    } catch (err) {
+      console.error("Failed to fetch hidden services:", err)
+    } finally {
+      setLoadingHidden(false)
+    }
+  }
+
+  const handleToggleShowHidden = () => {
+    const next = !showHidden
+    setShowHidden(next)
+    if (next) fetchHidden()
+  }
+
+  const handleUnhide = async (s) => {
+    if (!isAdmin) return
+    try {
+      await authFetch(`/api/services/${s.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hidden: false }),
+      })
+      await fetchHidden()
+      if (onRefresh) await onRefresh()
+    } catch (err) {
+      console.error("Failed to unhide service:", err)
+    }
+  }
+
+  // Deleting a service backed by a real, still-running container can't
+  // actually delete anything (the container just gets rediscovered on the
+  // next poll) — so for those, this hides it from the dashboard instead,
+  // and says so before doing it. Pure custom entries (added via "Add
+  // Service", no container behind them) are genuinely removed.
+  const handleDeleteClick = (s) => {
+    if (!isAdmin) return
+    const isRealContainer = !s.isCustom
+    const message = isRealContainer
+      ? `Hide "${s.name}" from the dashboard?\n\nThis won't stop or remove the actual container — Homelab OS didn't create it, so it isn't Homelab OS's to delete. It'll just stop showing up here. You can bring it back later from "Hidden Services".`
+      : `Delete "${s.name}"? This removes it from the dashboard permanently.`
+
+    if (!confirm(message)) return
+    if (onDelete) onDelete(s.id)
+    if (isRealContainer && onRefresh) {
+      // The container stays, so refresh to pull the now-hidden state.
+      setTimeout(onRefresh, 300)
+    }
+  }
 
   const checkIsOnline = (s) => s.online || s.status === "online" || s.state === "running"
   const checkIsFavorite = (s) => Boolean(s.is_favorite || s.favorite)
@@ -288,8 +353,62 @@ export function Manage({
             <span className="hidden sm:inline">Add New Service</span>
             <span className="sm:hidden">Add</span>
           </button>
+          {isAdmin && (
+            <button
+              onClick={handleToggleShowHidden}
+              className={`flex items-center gap-2 shrink-0 rounded-xl border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                showHidden
+                  ? "border-primary/30 bg-primary/15 text-primary"
+                  : "border-white/10 bg-secondary/40 text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {showHidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+              <span className="hidden sm:inline">Hidden Services</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Hidden Services Panel */}
+      {isAdmin && showHidden && (
+        <div className={`rounded-2xl p-4 ${glass}`}>
+          <h3 className="text-sm font-semibold text-muted-foreground">
+            Hidden Services {hiddenServices.length > 0 && `(${hiddenServices.length})`}
+          </h3>
+          {loadingHidden ? (
+            <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading...
+            </div>
+          ) : hiddenServices.length === 0 ? (
+            <p className="mt-2 text-sm text-muted-foreground">
+              Nothing hidden. Hidden containers stay running — they just won't show up in the list above.
+            </p>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {hiddenServices.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between rounded-lg border border-white/5 bg-secondary/30 px-3 py-2"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-secondary/70 ring-1 ring-white/5">
+                      <ServiceIcon service={s} className="h-4 w-4" />
+                    </span>
+                    <span className="text-sm font-medium">{s.name}</span>
+                    <StatusDot online={s.online} />
+                  </div>
+                  <button
+                    onClick={() => handleUnhide(s)}
+                    className="flex items-center gap-1.5 rounded-lg bg-primary/15 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/25"
+                  >
+                    <Eye className="h-3.5 w-3.5" /> Unhide
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Category Pills Bar */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
@@ -398,6 +517,23 @@ export function Manage({
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-1.5">
+                      {(() => {
+                        const launchUrl = getLaunchUrl(s)
+                        return (
+                          <a
+                            href={launchUrl || undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(e) => !launchUrl && e.preventDefault()}
+                            title={launchUrl ? "Launch" : "No reachable URL"}
+                            className={`flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary/60 hover:text-foreground ${
+                              !launchUrl ? "cursor-not-allowed opacity-40" : ""
+                            }`}
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        )
+                      })()}
                       <button
                         onClick={() => handleToggleFavorite(s)}
                         disabled={!isAdmin}
@@ -419,12 +555,12 @@ export function Manage({
                         <Pencil className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => isAdmin && onDelete && onDelete(s.id)}
+                        onClick={() => handleDeleteClick(s)}
                         disabled={!isAdmin}
-                        title={!isAdmin ? "Admin access required" : "Delete Service"}
+                        title={!isAdmin ? "Admin access required" : s.isCustom ? "Delete Service" : "Hide from Dashboard"}
                         className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/15 hover:text-destructive disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        {s.isCustom ? <Trash2 className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                       </button>
                     </div>
                   </td>
@@ -515,6 +651,23 @@ export function Manage({
                   >
                     <Star className={`h-4 w-4 ${isFav ? "fill-amber-400 text-amber-400" : ""}`} />
                   </button>
+                  {(() => {
+                    const launchUrl = getLaunchUrl(s)
+                    return (
+                      <a
+                        href={launchUrl || undefined}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => !launchUrl && e.preventDefault()}
+                        title={launchUrl ? "Launch" : "No reachable URL"}
+                        className={`flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/40 text-muted-foreground ${
+                          !launchUrl ? "cursor-not-allowed opacity-40" : ""
+                        }`}
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    )
+                  })()}
                   <button
                     onClick={() => openEdit(s)}
                     disabled={!isAdmin}
@@ -524,12 +677,12 @@ export function Manage({
                     <Pencil className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => isAdmin && onDelete && onDelete(s.id)}
+                    onClick={() => handleDeleteClick(s)}
                     disabled={!isAdmin}
-                    title={!isAdmin ? "Admin access required" : undefined}
+                    title={!isAdmin ? "Admin access required" : s.isCustom ? "Delete Service" : "Hide from Dashboard"}
                     className="flex h-9 w-9 items-center justify-center rounded-lg bg-destructive/10 text-destructive disabled:opacity-40"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    {s.isCustom ? <Trash2 className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                   </button>
                 </div>
               </div>

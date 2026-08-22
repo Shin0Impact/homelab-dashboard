@@ -1,31 +1,9 @@
 import React from "react"
 import { ExternalLink, Play, Square, Loader2, RefreshCw } from "lucide-react"
 import { CategoryTag, ServiceIcon, StatusDot, glass } from "../UIHelpers"
+import { getLaunchUrl } from "../../lib/utils"
 
 export function ServiceCard({ service, isCompact, isOnline, isLoading, onToggle, onRefresh, isAdmin = true }) {
-  const getLaunchUrl = (s) => {
-    const detectedPort =
-      s.port || (Array.isArray(s.ports) && s.ports.find((p) => p.PublicPort)?.PublicPort)
-
-    if (detectedPort) {
-      return `${window.location.protocol}//${window.location.hostname}:${detectedPort}`
-    }
-
-    if (s.url && s.url !== "#") {
-      try {
-        const parsed = new URL(s.url)
-        if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
-          parsed.hostname = window.location.hostname
-          parsed.protocol = window.location.protocol
-        }
-        return parsed.toString()
-      } catch {
-        return s.url
-      }
-    }
-    return null
-  }
-
   const computedUrl = getLaunchUrl(service)
 
   return (
