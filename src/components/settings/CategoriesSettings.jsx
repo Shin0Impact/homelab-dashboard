@@ -6,12 +6,13 @@ import { Plus, X } from "lucide-react"
 const glass =
   "border border-white/5 bg-card/60 backdrop-blur-xl shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset]"
 
-export function CategoriesSettings() {
+export function CategoriesSettings({ isAdmin = true }) {
   const dispatch = useDispatch()
   const categories = useSelector((state) => state.settings.categories)
   const [newCat, setNewCat] = useState("")
 
   const handleAddCat = () => {
+    if (!isAdmin) return
     const v = newCat.trim()
     if (v) {
       dispatch(addCategory(v))
@@ -32,8 +33,10 @@ export function CategoriesSettings() {
           >
             {c}
             <button
-              onClick={() => dispatch(removeCategory(c))}
-              className="text-muted-foreground hover:text-destructive"
+              onClick={() => isAdmin && dispatch(removeCategory(c))}
+              disabled={!isAdmin}
+              title={!isAdmin ? "Admin access required" : undefined}
+              className="text-muted-foreground hover:text-destructive disabled:cursor-not-allowed disabled:opacity-40"
             >
               <X className="h-3 w-3" />
             </button>
@@ -48,12 +51,14 @@ export function CategoriesSettings() {
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.nativeEvent.isComposing) handleAddCat()
           }}
-          placeholder="New category"
-          className="flex-1 rounded-lg border border-white/10 bg-input/40 px-3 py-2 text-sm outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+          placeholder={isAdmin ? "New category" : "Admin access required"}
+          disabled={!isAdmin}
+          className="flex-1 rounded-lg border border-white/10 bg-input/40 px-3 py-2 text-sm outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-40"
         />
         <button
           onClick={handleAddCat}
-          className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          disabled={!isAdmin}
+          className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Plus className="h-4 w-4" />
           Add

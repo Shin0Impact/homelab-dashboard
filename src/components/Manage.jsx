@@ -13,6 +13,7 @@ import {
   Loader2,
 } from "lucide-react"
 import { ICONS, CategoryTag, ServiceIcon, StatusDot, glass } from "./UIHelpers"
+import { authFetch } from "../lib/api"
 
 const ICON_OPTIONS = [
   "container",
@@ -170,6 +171,7 @@ export function Manage({
   onUpdate,
   onDelete,
   onRefresh,
+  isAdmin = true,
 }) {
   const [localServices, setLocalServices] = useState(initialServices)
   const [modalOpen, setModalOpen] = useState(false)
@@ -186,10 +188,12 @@ export function Manage({
   const checkIsFavorite = (s) => Boolean(s.is_favorite || s.favorite)
 
   function openAdd() {
+    if (!isAdmin) return
     setEditing(null)
     setModalOpen(true)
   }
   function openEdit(s) {
+    if (!isAdmin) return
     setEditing(s)
     setModalOpen(true)
   }
@@ -200,6 +204,7 @@ export function Manage({
   }
 
   function handleToggleFavorite(s) {
+    if (!isAdmin) return
     const isFav = !checkIsFavorite(s)
     const updatedService = {
       ...s,
@@ -217,12 +222,11 @@ export function Manage({
   }
 
   const handleContainerAction = async (service, action) => {
+    if (!isAdmin) return
     setActionLoadingMap((prev) => ({ ...prev, [`${service.id}-${action}`]: true }))
     try {
-      const token = localStorage.getItem("homelab_token")
-      const res = await fetch(`/api/containers/${service.id}/${action}`, {
+      const res = await authFetch(`/api/containers/${service.id}/${action}`, {
         method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
       if (res.ok && onRefresh) {
         await onRefresh()
@@ -276,7 +280,9 @@ export function Manage({
 
           <button
             onClick={openAdd}
-            className="flex items-center gap-2 shrink-0 rounded-xl bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+            disabled={!isAdmin}
+            title={!isAdmin ? "Admin access required" : undefined}
+            className="flex items-center gap-2 shrink-0 rounded-xl bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Add New Service</span>
@@ -352,9 +358,9 @@ export function Manage({
                       {isOnline ? (
                         <button
                           onClick={() => handleContainerAction(s, "stop")}
-                          disabled={isStopLoading}
-                          title="Stop Container"
-                          className="flex h-7 w-7 items-center justify-center rounded-md bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 disabled:opacity-50"
+                          disabled={isStopLoading || !isAdmin}
+                          title={!isAdmin ? "Admin access required" : "Stop Container"}
+                          className="flex h-7 w-7 items-center justify-center rounded-md bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           {isStopLoading ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -365,9 +371,9 @@ export function Manage({
                       ) : (
                         <button
                           onClick={() => handleContainerAction(s, "start")}
-                          disabled={isStartLoading}
-                          title="Start Container"
-                          className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50"
+                          disabled={isStartLoading || !isAdmin}
+                          title={!isAdmin ? "Admin access required" : "Start Container"}
+                          className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           {isStartLoading ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -378,9 +384,9 @@ export function Manage({
                       )}
                       <button
                         onClick={() => handleContainerAction(s, "restart")}
-                        disabled={isRestartLoading}
-                        title="Restart Container"
-                        className="flex h-7 w-7 items-center justify-center rounded-md bg-secondary/60 text-muted-foreground hover:text-foreground disabled:opacity-50"
+                        disabled={isRestartLoading || !isAdmin}
+                        title={!isAdmin ? "Admin access required" : "Restart Container"}
+                        className="flex h-7 w-7 items-center justify-center rounded-md bg-secondary/60 text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         {isRestartLoading ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -394,8 +400,9 @@ export function Manage({
                     <div className="flex items-center justify-end gap-1.5">
                       <button
                         onClick={() => handleToggleFavorite(s)}
-                        title={isFav ? "Remove from Favorites" : "Add to Favorites"}
-                        className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                        disabled={!isAdmin}
+                        title={!isAdmin ? "Admin access required" : isFav ? "Remove from Favorites" : "Add to Favorites"}
+                        className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                           isFav
                             ? "text-amber-400 hover:bg-amber-500/10"
                             : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
@@ -405,13 +412,17 @@ export function Manage({
                       </button>
                       <button
                         onClick={() => openEdit(s)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+                        disabled={!isAdmin}
+                        title={!isAdmin ? "Admin access required" : "Edit Service"}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary/60 hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => onDelete && onDelete(s.id)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+                        onClick={() => isAdmin && onDelete && onDelete(s.id)}
+                        disabled={!isAdmin}
+                        title={!isAdmin ? "Admin access required" : "Delete Service"}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/15 hover:text-destructive disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -469,28 +480,36 @@ export function Manage({
                   {isOnline ? (
                     <button
                       onClick={() => handleContainerAction(s, "stop")}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-500/10 text-rose-400"
+                      disabled={!isAdmin}
+                      title={!isAdmin ? "Admin access required" : "Stop Container"}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-500/10 text-rose-400 disabled:opacity-40"
                     >
                       <Square className="h-4 w-4 fill-current" />
                     </button>
                   ) : (
                     <button
                       onClick={() => handleContainerAction(s, "start")}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400"
+                      disabled={!isAdmin}
+                      title={!isAdmin ? "Admin access required" : "Start Container"}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 disabled:opacity-40"
                     >
                       <Play className="h-4 w-4 fill-current" />
                     </button>
                   )}
                   <button
                     onClick={() => handleContainerAction(s, "restart")}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/40 text-muted-foreground"
+                    disabled={!isAdmin}
+                    title={!isAdmin ? "Admin access required" : "Restart Container"}
+                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/40 text-muted-foreground disabled:opacity-40"
                   >
                     <RotateCw className="h-4 w-4" />
                   </button>
 
                   <button
                     onClick={() => handleToggleFavorite(s)}
-                    className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
+                    disabled={!isAdmin}
+                    title={!isAdmin ? "Admin access required" : undefined}
+                    className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors disabled:opacity-40 ${
                       isFav ? "text-amber-400 bg-amber-500/10" : "bg-secondary/40 text-muted-foreground"
                     }`}
                   >
@@ -498,13 +517,17 @@ export function Manage({
                   </button>
                   <button
                     onClick={() => openEdit(s)}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/40 text-muted-foreground"
+                    disabled={!isAdmin}
+                    title={!isAdmin ? "Admin access required" : undefined}
+                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary/40 text-muted-foreground disabled:opacity-40"
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => onDelete && onDelete(s.id)}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-destructive/10 text-destructive"
+                    onClick={() => isAdmin && onDelete && onDelete(s.id)}
+                    disabled={!isAdmin}
+                    title={!isAdmin ? "Admin access required" : undefined}
+                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-destructive/10 text-destructive disabled:opacity-40"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>

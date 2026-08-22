@@ -2,7 +2,7 @@ import React from "react"
 import { ExternalLink, Play, Square, Loader2, RefreshCw } from "lucide-react"
 import { CategoryTag, ServiceIcon, StatusDot, glass } from "../UIHelpers"
 
-export function ServiceCard({ service, isCompact, isOnline, isLoading, onToggle, onRefresh }) {
+export function ServiceCard({ service, isCompact, isOnline, isLoading, onToggle, onRefresh, isAdmin = true }) {
   const getLaunchUrl = (s) => {
     const detectedPort =
       s.port || (Array.isArray(s.ports) && s.ports.find((p) => p.PublicPort)?.PublicPort)
@@ -66,15 +66,15 @@ export function ServiceCard({ service, isCompact, isOnline, isLoading, onToggle,
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => onToggle(service)}
-            disabled={isLoading}
-            title={isOnline ? "Stop Container" : "Start Container"}
+            disabled={isLoading || !isAdmin}
+            title={!isAdmin ? "Admin access required" : isOnline ? "Stop Container" : "Start Container"}
             className={`flex items-center justify-center rounded-lg border transition-colors ${
               isCompact ? "h-8 w-8" : "h-9 w-9"
             } ${
               isOnline
                 ? "border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20"
                 : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
-            } ${isLoading ? "cursor-not-allowed opacity-50" : ""}`}
+            } ${isLoading || !isAdmin ? "cursor-not-allowed opacity-50" : ""}`}
           >
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />

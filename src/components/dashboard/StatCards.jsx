@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { setServicesTelemetry } from "../../store/telemetrySlice";
+import { authFetch } from "../../lib/api";
 import {
   Activity,
   Boxes,
@@ -59,10 +60,7 @@ export function StatCards({
   useEffect(() => {
     const fetchServices = async () => {
       try {
-        const token = localStorage.getItem("homelab_token");
-        const res = await fetch("/api/services-telemetry", {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
+        const res = await authFetch("/api/services-telemetry");
         if (res.ok) {
           const data = await res.json();
           dispatch(setServicesTelemetry(data));

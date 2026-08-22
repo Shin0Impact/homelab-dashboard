@@ -3,8 +3,9 @@ import { Search } from "lucide-react"
 import { glass, useCompactMode, useDynamicPolling } from "./UIHelpers"
 import { StatCards } from "./dashboard/StatCards"
 import { ServiceCard } from "./dashboard/ServiceCard"
+import { authFetch } from "../lib/api"
 
-export function Dashboard({ services = [], onRefresh }) {
+export function Dashboard({ services = [], onRefresh, isAdmin = false }) {
   const [query, setQuery] = useState("")
   const [loadingMap, setLoadingMap] = useState({})
 
@@ -14,14 +15,9 @@ export function Dashboard({ services = [], onRefresh }) {
 
   const isCompact = useCompactMode()
 
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem("homelab_token")
-    return token ? { Authorization: `Bearer ${token}` } : {}
-  }
-
   const fetchTailscaleStatus = async () => {
     try {
-      const res = await fetch("/api/tailscale", { headers: getAuthHeaders() })
+      const res = await authFetch("/api/tailscale")
       if (res.ok) {
         const data = await res.json()
         setTailscale({ ...data, loading: false })
@@ -33,7 +29,7 @@ export function Dashboard({ services = [], onRefresh }) {
 
   const fetchStorageStatus = async () => {
     try {
-      const res = await fetch("/api/storage", { headers: getAuthHeaders() })
+      const res = await authFetch("/api/storage")
       if (res.ok) {
         const data = await res.json()
         setStorage({ ...data, loading: false })
@@ -45,7 +41,7 @@ export function Dashboard({ services = [], onRefresh }) {
 
   const fetchServicesTelemetry = async () => {
     try {
-      const res = await fetch("/api/services-telemetry", { headers: getAuthHeaders() })
+      const res = await authFetch("/api/services-telemetry")
       if (res.ok) {
         const data = await res.json()
         setServicesTelemetry(data)
@@ -81,14 +77,14 @@ export function Dashboard({ services = [], onRefresh }) {
   )
 
   const handleToggleContainer = async (service) => {
+    if (!isAdmin) return
     const isOnline = checkIsOnline(service)
     const action = isOnline ? "stop" : "start"
     setLoadingMap((prev) => ({ ...prev, [service.id]: true }))
 
     try {
-      const res = await fetch(`/api/containers/${service.id}/${action}`, {
+      const res = await authFetch(`/api/containers/${service.id}/${action}`, {
         method: "POST",
-        headers: getAuthHeaders(),
       })
       if (res.ok && onRefresh) {
         await onRefresh()
@@ -136,6 +132,7 @@ export function Dashboard({ services = [], onRefresh }) {
             isLoading={!!loadingMap[s.id]}
             onToggle={handleToggleContainer}
             onRefresh={onRefresh}
+            isAdmin={isAdmin}
           />
         ))}
 

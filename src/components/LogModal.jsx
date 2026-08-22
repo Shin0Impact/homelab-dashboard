@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Terminal, X, RefreshCw, Loader2 } from "lucide-react";
+import { authFetch } from "../lib/api";
 
 const glass = "border border-white/10 bg-card/90 backdrop-blur-2xl shadow-2xl";
 
@@ -11,10 +12,7 @@ export function LogModal({ container, onClose }) {
     if (!container) return;
     setLoading(true);
     try {
-      const token = localStorage.getItem("homelab_token");
-      const res = await fetch(`/api/containers/${container.id}/logs`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const res = await authFetch(`/api/containers/${container.id}/logs`);
       const text = await res.text();
       setLogs(text);
     } catch {

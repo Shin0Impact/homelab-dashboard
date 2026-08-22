@@ -9,6 +9,7 @@ import { Stacks } from "./components/Stacks"
 import { Metrics } from "./components/Metrics"
 import { Sidebar, Topbar } from "./components/Navigation"
 import { Settings } from "./components/Settings"
+import { authFetch, onAuthExpired } from "./lib/api"
 
 const PAGE_META = {
   dashboard: { title: "Dashboard", subtitle: "Live Container Monitor" },
@@ -30,6 +31,8 @@ export default function App() {
     return stored ? JSON.parse(stored) : null
   })
 
+  const isAdmin = user?.role === "Admin"
+
   const [page, setPage] = useState("dashboard")
   const [services, setServices] = useState([])
   const [categories, setCategories] = useState([])
@@ -37,6 +40,23 @@ export default function App() {
   // Whether an admin account exists yet: null = still checking, true/false
   // once we know. Checked once on load, only matters while logged out.
   const [setupRequired, setSetupRequired] = useState(null)
+
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem("homelab_authed")
+    localStorage.removeItem("homelab_token")
+    localStorage.removeItem("homelab_user")
+    setUser(null)
+    setAuthed(false)
+  }, [])
+
+  // If any authFetch() call anywhere in the app gets a 401 (token expired,
+  // revoked, or invalid), drop back to the login screen instead of leaving
+  // every poller silently failing in the background.
+  useEffect(() => {
+    return onAuthExpired(() => {
+      handleLogout()
+    })
+  }, [handleLogout])
 
   useEffect(() => {
     if (authed) return
@@ -74,20 +94,13 @@ export default function App() {
     }
   }, [theme])
 
-  const getAuthHeaders = useCallback(() => {
-    const token = localStorage.getItem("homelab_token")
-    return token ? { Authorization: `Bearer ${token}` } : {}
-  }, [])
-
   // Telemetry Polling Effect (Fixed 1 second interval / 1000ms)
   useEffect(() => {
     if (!authed) return
 
     const fetchTelemetry = async () => {
       try {
-        const res = await fetch("/api/telemetry", {
-          headers: getAuthHeaders(),
-        })
+        const res = await authFetch("/api/telemetry")
         if (!res.ok) throw new Error("Telemetry request failed")
         const data = await res.json()
         dispatch(updateTelemetryData(data))
@@ -99,7 +112,7 @@ export default function App() {
     fetchTelemetry()
     const interval = setInterval(fetchTelemetry, 1000)
     return () => clearInterval(interval)
-  }, [authed, dispatch, getAuthHeaders])
+  }, [authed, dispatch])
 
   // Helper to apply favorite status from localStorage onto raw API data
   const applyFavorites = useCallback(
@@ -118,9 +131,7 @@ export default function App() {
 
   const fetchContainers = useCallback(async () => {
     try {
-      const res = await fetch("/api/containers", {
-        headers: getAuthHeaders(),
-      })
+      const res = await authFetch("/api/containers")
       const data = await res.json()
 
       let rawList = []
@@ -135,7 +146,7 @@ export default function App() {
     } catch (err) {
       console.error("Failed to load services:", err)
     }
-  }, [getAuthHeaders, applyFavorites])
+  }, [applyFavorites])
 
   // Container Polling Effect (Fixed 5 seconds interval)
   useEffect(() => {
@@ -147,12 +158,9 @@ export default function App() {
 
   const handleAddService = async (newService) => {
     try {
-      await fetch("/api/services", {
+      await authFetch("/api/services", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newService),
       })
       fetchContainers()
@@ -179,25 +187,11 @@ export default function App() {
     )
 
     try {
-      const res = await fetch(`/api/services/${updatedService.id}`, {
+      await authFetch(`/api/services/${updatedService.id}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updatedService),
       })
-
-      if (!res.ok) {
-        await fetch(`/api/containers/${updatedService.id}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            ...getAuthHeaders(),
-          },
-          body: JSON.stringify(updatedService),
-        })
-      }
     } catch (err) {
       console.error("Failed to persist service update to backend:", err)
     }
@@ -205,10 +199,7 @@ export default function App() {
 
   const handleDeleteService = async (id) => {
     try {
-      await fetch(`/api/services/${id}`, {
-        method: "DELETE",
-        headers: getAuthHeaders(),
-      })
+      await authFetch(`/api/services/${id}`, { method: "DELETE" })
       fetchContainers()
     } catch (err) {
       console.error("Failed to delete service:", err)
@@ -226,14 +217,6 @@ export default function App() {
 
     localStorage.setItem("homelab_authed", "true")
     setAuthed(true)
-  }
-
-  const handleLogout = () => {
-    localStorage.removeItem("homelab_authed")
-    localStorage.removeItem("homelab_token")
-    localStorage.removeItem("homelab_user")
-    setUser(null)
-    setAuthed(false)
   }
 
   if (!authed) {
@@ -268,6 +251,7 @@ export default function App() {
               services={services}
               categories={categories}
               onRefresh={fetchContainers}
+              isAdmin={isAdmin}
             />
           )}
           {page === "manage" && (
@@ -278,16 +262,18 @@ export default function App() {
               onUpdate={handleUpdateService}
               onDelete={handleDeleteService}
               onRefresh={fetchContainers}
+              isAdmin={isAdmin}
             />
           )}
           {page === "stacks" && (
             <Stacks
               services={services}
               onRefresh={fetchContainers}
+              isAdmin={isAdmin}
             />
           )}
-          {page === "metrics" && <Metrics />}
-          {page === "settings" && <Settings />}
+          {page === "metrics" && <Metrics isAdmin={isAdmin} />}
+          {page === "settings" && <Settings isAdmin={isAdmin} />}
         </div>
       </main>
     </div>

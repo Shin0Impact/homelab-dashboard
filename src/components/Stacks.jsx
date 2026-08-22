@@ -1,9 +1,10 @@
 import React, { useState } from "react"
 import { Layers, Play, Square, FileCode, Plus, Search, AlertCircle, X, Save, Loader2 } from "lucide-react"
+import { authFetch } from "../lib/api"
 
 const glass = "border border-border bg-card text-card-foreground backdrop-blur-xl shadow-sm transition-colors"
 
-export function Stacks({ services = [], onRefresh }) {
+export function Stacks({ services = [], onRefresh, isAdmin = true }) {
   const [search, setSearch] = useState("")
 
   // Edit / View Compose Modal States
@@ -44,15 +45,13 @@ export function Stacks({ services = [], onRefresh }) {
     stack.name.toLowerCase().includes(search.toLowerCase())
   )
 
-  // Fetch real compose content when clicking "Compose File"
+  // Fetch real compose content when clicking "Compose File" — viewing is
+  // available to any logged-in user (matches the backend's read access).
   const handleOpenComposeModal = async (stackName) => {
     setSelectedStack(stackName)
     setIsLoadingCompose(true)
     try {
-      const token = localStorage.getItem("homelab_token")
-      const res = await fetch(`/api/stacks/${stackName}/compose`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+      const res = await authFetch(`/api/stacks/${stackName}/compose`)
       const data = await res.json()
       setStackComposeContent(data.composeContent || "")
     } catch (err) {
@@ -63,19 +62,16 @@ export function Stacks({ services = [], onRefresh }) {
     }
   }
 
-  // Save / Redeploy stack updates
+  // Save / Redeploy stack updates — Admin only, same as the backend route.
   const handleSaveAndDeployCompose = async () => {
+    if (!isAdmin) return
     if (!selectedStack || !stackComposeContent.trim()) return
     setIsSaving(true)
 
     try {
-      const token = localStorage.getItem("homelab_token")
-      const res = await fetch("/api/stacks", {
+      const res = await authFetch("/api/stacks", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: selectedStack,
           composeContent: stackComposeContent,
@@ -95,20 +91,17 @@ export function Stacks({ services = [], onRefresh }) {
     }
   }
 
-  // Deploy brand new stack
+  // Deploy brand new stack — Admin only.
   const handleDeploySubmit = async (e) => {
     e.preventDefault()
+    if (!isAdmin) return
     if (!stackNameInput.trim() || !newComposeContent.trim()) return
     setIsSaving(true)
 
     try {
-      const token = localStorage.getItem("homelab_token")
-      const res = await fetch("/api/stacks", {
+      const res = await authFetch("/api/stacks", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: stackNameInput.trim(),
           composeContent: newComposeContent,
@@ -131,16 +124,13 @@ export function Stacks({ services = [], onRefresh }) {
     }
   }
 
-  // Bring down stack
+  // Bring down stack — Admin only.
   const handleStackDown = async (stackName) => {
+    if (!isAdmin) return
     if (!confirm(`Are you sure you want to stop all containers in ${stackName}?`)) return
 
     try {
-      const token = localStorage.getItem("homelab_token")
-      const res = await fetch(`/api/stacks/${stackName}/down`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+      const res = await authFetch(`/api/stacks/${stackName}/down`, { method: "POST" })
 
       if (!res.ok) throw new Error("Failed to bring down stack")
 
@@ -173,8 +163,10 @@ export function Stacks({ services = [], onRefresh }) {
             />
           </div>
           <button
-            onClick={() => setIsDeployOpen(true)}
-            className="flex items-center gap-2 shrink-0 px-3.5 py-1.5 bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 rounded-xl text-xs font-semibold transition-colors"
+            onClick={() => isAdmin && setIsDeployOpen(true)}
+            disabled={!isAdmin}
+            title={!isAdmin ? "Admin access required" : undefined}
+            className="flex items-center gap-2 shrink-0 px-3.5 py-1.5 bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 rounded-xl text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Plus className="h-4 w-4" /> Deploy Stack
           </button>
@@ -229,7 +221,9 @@ export function Stacks({ services = [], onRefresh }) {
                   </button>
                   <button
                     onClick={() => handleStackDown(stack.rawKey)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20 hover:bg-rose-500/25 transition-colors"
+                    disabled={!isAdmin}
+                    title={!isAdmin ? "Admin access required" : undefined}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20 hover:bg-rose-500/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <Square className="h-3.5 w-3.5 fill-current" /> Down
                   </button>
@@ -291,7 +285,9 @@ export function Stacks({ services = [], onRefresh }) {
                 rows={12}
                 value={stackComposeContent}
                 onChange={(e) => setStackComposeContent(e.target.value)}
-                className="w-full p-4 font-mono text-xs bg-zinc-950 text-emerald-400 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
+                readOnly={!isAdmin}
+                title={!isAdmin ? "Admin access required to edit" : undefined}
+                className={`w-full p-4 font-mono text-xs bg-zinc-950 text-emerald-400 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none ${!isAdmin ? "opacity-70 cursor-not-allowed" : ""}`}
               />
             )}
 
@@ -300,23 +296,25 @@ export function Stacks({ services = [], onRefresh }) {
                 onClick={() => setSelectedStack(null)}
                 className="px-4 py-2 text-xs font-medium rounded-xl border border-border text-muted-foreground hover:text-foreground"
               >
-                Cancel
+                {isAdmin ? "Cancel" : "Close"}
               </button>
-              <button
-                onClick={handleSaveAndDeployCompose}
-                disabled={isSaving || isLoadingCompose}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                Save & Deploy
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={handleSaveAndDeployCompose}
+                  disabled={isSaving || isLoadingCompose}
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                  Save & Deploy
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
 
       {/* Deploy New Stack Modal */}
-      {isDeployOpen && (
+      {isDeployOpen && isAdmin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsDeployOpen(false)} />
           <div className={`relative w-full max-w-lg rounded-2xl p-6 ${glass} space-y-4`}>

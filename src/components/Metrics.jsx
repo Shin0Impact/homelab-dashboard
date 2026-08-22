@@ -28,6 +28,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
+import { authFetch } from "../lib/api"
 
 const CHART_COLORS = {
   cpu: "#00d8d6",
@@ -66,7 +67,7 @@ function ChartCard({ title, subtitle, icon: Icon, children }) {
   )
 }
 
-export function Metrics() {
+export function Metrics({ isAdmin = true }) {
   const dispatch = useDispatch()
   
   const { cpuHistory, netHistory, ramData, totalRam, processes, errorMsg } =
@@ -76,16 +77,9 @@ export function Metrics() {
   const [activeMobileProc, setActiveMobileProc] = useState(null)
   const timerRef = useRef(null)
 
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem("homelab_token")
-    return token ? { Authorization: `Bearer ${token}` } : {}
-  }
-
   const fetchMetrics = async () => {
     try {
-      const res = await fetch("/api/telemetry", {
-        headers: getAuthHeaders(),
-      })
+      const res = await authFetch("/api/telemetry")
       if (!res.ok) throw new Error("Telemetry request failed")
       const data = await res.json()
       dispatch(updateTelemetryData(data))
@@ -95,11 +89,9 @@ export function Metrics() {
   }
 
   const handleContainerAction = async (id, action) => {
+    if (!isAdmin) return
     try {
-      await fetch(`/api/containers/${id}/${action}`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-      })
+      await authFetch(`/api/containers/${id}/${action}`, { method: "POST" })
       setActiveMobileProc(null)
       fetchMetrics()
     } catch (e) {
@@ -107,8 +99,9 @@ export function Metrics() {
     }
   }
 
-  // Mobile Long Press Logic
+  // Mobile Long Press Logic — only Admins get the action menu at all.
   const handleTouchStart = (proc) => {
+    if (!isAdmin) return
     timerRef.current = setTimeout(() => {
       setActiveMobileProc(proc)
     }, 500)
@@ -325,22 +318,27 @@ export function Metrics() {
                       {p.status === "running" ? (
                         <button
                           onClick={() => handleContainerAction(p.id, "stop")}
-                          className="inline-flex items-center gap-1 rounded-lg bg-rose-500/10 px-2.5 py-1 text-xs font-medium text-rose-400 hover:bg-rose-500/20"
+                          disabled={!isAdmin}
+                          title={!isAdmin ? "Admin access required" : undefined}
+                          className="inline-flex items-center gap-1 rounded-lg bg-rose-500/10 px-2.5 py-1 text-xs font-medium text-rose-400 hover:bg-rose-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Square className="h-3 w-3 fill-current" /> Stop
                         </button>
                       ) : (
                         <button
                           onClick={() => handleContainerAction(p.id, "start")}
-                          className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400 hover:bg-emerald-500/20"
+                          disabled={!isAdmin}
+                          title={!isAdmin ? "Admin access required" : undefined}
+                          className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Play className="h-3 w-3 fill-current" /> Start
                         </button>
                       )}
                       <button
                         onClick={() => handleContainerAction(p.id, "restart")}
-                        title="Restart Container"
-                        className="inline-flex items-center gap-1 rounded-lg bg-secondary/60 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                        disabled={!isAdmin}
+                        title={!isAdmin ? "Admin access required" : "Restart Container"}
+                        className="inline-flex items-center gap-1 rounded-lg bg-secondary/60 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <RotateCw className="h-3 w-3" /> Restart
                       </button>

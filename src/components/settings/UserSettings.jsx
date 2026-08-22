@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react"
-import { UserPlus, Trash2, Shield, User as UserIcon, KeyRound, Check } from "lucide-react"
+import { UserPlus, Trash2, Shield, User as UserIcon, KeyRound, Check, Lock } from "lucide-react"
+import { authFetch } from "../../lib/api"
 
 const glass =
   "border border-white/5 bg-card/60 backdrop-blur-xl shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset]"
 
-export function UserSettings({ token }) {
+export function UserSettings({ token, isAdmin = true }) {
   const [users, setUsers] = useState([])
   const [newUser, setNewUser] = useState("")
   const [newPass, setNewPass] = useState("")
@@ -19,14 +20,13 @@ export function UserSettings({ token }) {
   }
 
   const fetchUsers = async () => {
+    if (!isAdmin) return
     if (!token) {
       setUserError("No authentication token found. Please sign in again.")
       return
     }
     try {
-      const res = await fetch("/api/users", {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await authFetch("/api/users")
       if (res.status === 401 || res.status === 403) {
         handleAuthError()
         return
@@ -43,19 +43,20 @@ export function UserSettings({ token }) {
 
   useEffect(() => {
     fetchUsers()
-  }, [token])
+  }, [token, isAdmin])
 
   const handleAddUser = async (e) => {
     e.preventDefault()
     setUserError("")
     setUserSuccess("")
+    if (newPass.length < 8) {
+      setUserError("Password must be at least 8 characters.")
+      return
+    }
     try {
-      const res = await fetch("/api/users", {
+      const res = await authFetch("/api/users", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: newUser, password: newPass, role: newRole }),
       })
 
@@ -79,14 +80,15 @@ export function UserSettings({ token }) {
     setUserError("")
     setUserSuccess("")
     if (!editPassword) return
+    if (editPassword.length < 8) {
+      setUserError("Password must be at least 8 characters.")
+      return
+    }
 
     try {
-      const res = await fetch(`/api/users/${id}/password`, {
+      const res = await authFetch(`/api/users/${id}/password`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ newPassword: editPassword }),
       })
 
@@ -104,10 +106,7 @@ export function UserSettings({ token }) {
   const handleDeleteUser = async (id) => {
     if (!confirm("Are you sure you want to delete this user?")) return
     try {
-      const res = await fetch(`/api/users/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await authFetch(`/api/users/${id}`, { method: "DELETE" })
       if (res.ok) {
         fetchUsers()
       } else {
@@ -118,6 +117,26 @@ export function UserSettings({ token }) {
       console.error("Failed to delete user", err)
     }
   }
+
+  if (!isAdmin) {
+    return (
+      <div className={`rounded-2xl p-6 ${glass} lg:col-span-2`}>
+        <h2 className="text-base font-semibold">Users & Security</h2>
+        <div className="mt-4 flex items-center gap-3 rounded-xl border border-white/5 bg-secondary/30 p-4 text-sm text-muted-foreground">
+          <Lock className="h-4 w-4 shrink-0" />
+          Admin access required to view or manage user accounts.
+        </div>
+      </div>
+    )
+  }
+
+  // Only an Admin account itself, or another Admin, should ever see the
+  // delete option — and never for the last remaining Admin, or everyone
+  // could get locked out. (Previously this checked for the literal
+  // username "admin", which broke the moment someone picked their own
+  // username during first-run setup.)
+  const adminCount = users.filter((u) => u.role === "Admin").length
+  const canDelete = (u) => !(u.role === "Admin" && adminCount <= 1)
 
   return (
     <div className={`rounded-2xl p-6 ${glass} lg:col-span-2`}>
@@ -134,14 +153,16 @@ export function UserSettings({ token }) {
           type="text"
           placeholder="Username"
           required
+          minLength={3}
           value={newUser}
           onChange={(e) => setNewUser(e.target.value)}
           className="min-w-[130px] flex-1 rounded-lg border border-white/10 bg-input/40 px-3 py-2 text-sm outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
         />
         <input
           type="password"
-          placeholder="Password"
+          placeholder="Password (min. 8 characters)"
           required
+          minLength={8}
           value={newPass}
           onChange={(e) => setNewPass(e.target.value)}
           className="min-w-[130px] flex-1 rounded-lg border border-white/10 bg-input/40 px-3 py-2 text-sm outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
@@ -190,7 +211,7 @@ export function UserSettings({ token }) {
                   Edit Password
                 </button>
 
-                {u.username !== "admin" && (
+                {canDelete(u) && (
                   <button
                     onClick={() => handleDeleteUser(u.id)}
                     className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
@@ -205,7 +226,7 @@ export function UserSettings({ token }) {
               <div className="mt-3 flex gap-2 pl-9">
                 <input
                   type="password"
-                  placeholder={`New password for ${u.username}`}
+                  placeholder={`New password for ${u.username} (min. 8 characters)`}
                   value={editPassword}
                   onChange={(e) => setEditPassword(e.target.value)}
                   className="flex-1 rounded-lg border border-white/10 bg-input/40 px-3 py-1.5 text-xs outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
