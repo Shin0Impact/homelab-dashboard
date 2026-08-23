@@ -2,25 +2,11 @@ import express from "express";
 import os from "os";
 import si from "systeminformation";
 import { docker } from "../helpers/dockerUtils.js";
-import { execAsync, getStorageStats, getCpuUsage } from "../helpers/sysInfo.js";
+import { execAsync, getStorageStats } from "../helpers/sysInfo.js";
 import { getServicesTelemetry } from "../helpers/serviceMonitors.js";
 import { authenticateToken } from "./auth.js";
 
 const router = express.Router();
-
-let startCpu = getCpuUsage();
-let currentCpuPercent = 0;
-
-setInterval(() => {
-  const endCpu = getCpuUsage();
-  const idleDiff = endCpu.idle - startCpu.idle;
-  const totalDiff = endCpu.total - startCpu.total;
-  startCpu = endCpu;
-  currentCpuPercent = Math.max(
-    0,
-    Math.min(100, Math.round((1 - idleDiff / (totalDiff || 1)) * 100)),
-  );
-}, 2000);
 
 // Telemetry reveals container names, resource usage, and network topology —
 // all of these routes now require login (previously none of them did).
@@ -75,6 +61,24 @@ async function getNetworkThroughputKBs() {
   }
 }
 
+// CPU% via `systeminformation` instead of hand-rolled os.cpus() tick math.
+// The old implementation sampled os.cpus() every 2s and derived %busy from
+// the idle/total delta itself — mathematically the standard approach, but
+// systeminformation already handles the platform-specific quirks that
+// approach is prone to across different kernels/architectures (some ARM
+// boards and virtualized hosts report CPU tick counters that don't behave
+// the way the naive calculation assumes), and it's already a proven
+// dependency in this codebase for the network stats above.
+async function getCpuPercent() {
+  try {
+    const load = await si.currentLoad();
+    return Math.round(load.currentLoad);
+  } catch (err) {
+    console.error("CPU load error:", err.message);
+    return 0;
+  }
+}
+
 router.get("/telemetry", authenticateToken, async (req, res) => {
   res.setHeader("Content-Type", "application/json");
 
@@ -90,6 +94,42 @@ router.get("/telemetry", authenticateToken, async (req, res) => {
       { name: "Free RAM", value: freeMemGB, fill: "#22c55e" },
     ];
 
+    const [cpuLoad, net] = await Promise.all([
+      getCpuPercent(),
+      getNetworkThroughputKBs(),
+    ]);
+
+    res.json({
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }),
+      cpuLoad,
+      ram: ramBreakdown,
+      net,
+      totalMemGB,
+      usedMemGB,
+      freeMemGB,
+    });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ error: "Failed to collect telemetry", details: err.message });
+  }
+});
+
+// Per-container CPU/memory breakdown for the Metrics page's process table.
+// Split out from /telemetry on purpose: this calls Docker's stats API once
+// per running container, which isn't cheap, and /telemetry itself is
+// polled globally every second the whole time you're logged in — not just
+// while looking at this table. Polling per-container stats at that rate
+// for every container on the host is real, sustained CPU overhead, and on
+// a lower-power box it can be enough to noticeably move the CPU-usage
+// number that this very page reports. This route is only fetched by the
+// Metrics page while it's actually open, and at a slower interval.
+router.get("/telemetry/processes", authenticateToken, async (req, res) => {
+  try {
     let dockerContainers = [];
     try {
       dockerContainers = await docker.listContainers({ all: false });
@@ -141,26 +181,11 @@ router.get("/telemetry", authenticateToken, async (req, res) => {
 
     processList.sort((a, b) => b.cpu - a.cpu || b.memValue - a.memValue);
 
-    const net = await getNetworkThroughputKBs();
-
-    res.json({
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      }),
-      cpuLoad: currentCpuPercent,
-      ram: ramBreakdown,
-      net,
-      totalMemGB,
-      usedMemGB,
-      freeMemGB,
-      processes: processList,
-    });
+    res.json({ processes: processList });
   } catch (err) {
     res
       .status(500)
-      .json({ error: "Failed to collect telemetry", details: err.message });
+      .json({ error: "Failed to collect process telemetry", details: err.message });
   }
 });
 

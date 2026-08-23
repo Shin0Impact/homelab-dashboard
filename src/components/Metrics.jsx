@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef } from "react"
+import React, { useMemo, useState, useRef, useEffect } from "react"
 import { useSelector, useDispatch } from "react-redux"
 import { setTelemetryError, updateTelemetryData } from "../store/telemetrySlice"
 import {
@@ -88,12 +88,34 @@ export function Metrics({ isAdmin = true }) {
     }
   }
 
+  // Per-container stats are their own endpoint (see server/routes/telemetry.js)
+  // specifically because they're expensive — one Docker stats() call per
+  // running container. Only fetch them while this page is actually open,
+  // and at a slower cadence than the cheap summary numbers above.
+  const fetchProcesses = async () => {
+    try {
+      const res = await authFetch("/api/telemetry/processes")
+      if (!res.ok) return
+      const data = await res.json()
+      dispatch(updateTelemetryData({ processes: data.processes }))
+    } catch (err) {
+      // Non-fatal — the process table just keeps its last known values.
+    }
+  }
+
+  useEffect(() => {
+    fetchProcesses()
+    const interval = setInterval(fetchProcesses, 3000)
+    return () => clearInterval(interval)
+  }, [])
+
   const handleContainerAction = async (id, action) => {
     if (!isAdmin) return
     try {
       await authFetch(`/api/containers/${id}/${action}`, { method: "POST" })
       setActiveMobileProc(null)
       fetchMetrics()
+      fetchProcesses()
     } catch (e) {
       console.error(e)
     }
@@ -238,7 +260,7 @@ export function Metrics({ isAdmin = true }) {
             </p>
           </div>
           <button
-            onClick={fetchMetrics}
+            onClick={fetchProcesses}
             className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary/40 text-muted-foreground hover:text-foreground"
           >
             <RefreshCw className="h-4 w-4" />

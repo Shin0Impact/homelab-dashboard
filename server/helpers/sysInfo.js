@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import { exec, execFile } from "child_process";
 import { promisify } from "util";
 
@@ -120,22 +119,4 @@ export async function getStorageStats() {
     driveCount: drives.length,
     drives,
   };
-}
-
-export function getCpuUsage() {
-  const cpus = os.cpus();
-  let user = 0,
-    nice = 0,
-    sys = 0,
-    idle = 0,
-    irq = 0;
-  for (const cpu of cpus) {
-    user += cpu.times.user;
-    nice += cpu.times.nice;
-    sys += cpu.times.sys;
-    idle += cpu.times.idle;
-    irq += cpu.times.irq;
-  }
-  const total = user + nice + sys + idle + irq;
-  return { idle, total };
 }
