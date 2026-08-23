@@ -1,11 +1,15 @@
 import React, { useState } from "react"
 import { Layers, Play, Square, FileCode, Plus, Search, AlertCircle, X, Save, Loader2 } from "lucide-react"
 import { authFetch } from "../lib/api"
+import { useToast } from "./Toast"
+import { useConfirm } from "./ConfirmDialog"
 
 const glass = "border border-border bg-card text-card-foreground backdrop-blur-xl shadow-sm transition-colors"
 
 export function Stacks({ services = [], onRefresh, isAdmin = true }) {
   const [search, setSearch] = useState("")
+  const toast = useToast()
+  const askConfirm = useConfirm()
 
   // Edit / View Compose Modal States
   const [selectedStack, setSelectedStack] = useState(null)
@@ -81,11 +85,11 @@ export function Stacks({ services = [], onRefresh, isAdmin = true }) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.details || data.error || "Failed to deploy stack")
 
-      alert(`Stack "${selectedStack}" updated & deployed successfully!`)
+      toast.success(`Stack "${selectedStack}" updated & deployed successfully!`)
       if (onRefresh) await onRefresh()
       setSelectedStack(null)
     } catch (err) {
-      alert(`Deployment Error: ${err.message}`)
+      toast.error(`Deployment error: ${err.message}`)
     } finally {
       setIsSaving(false)
     }
@@ -111,14 +115,14 @@ export function Stacks({ services = [], onRefresh, isAdmin = true }) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.details || data.error || "Failed to deploy stack")
 
-      alert(`Stack "${stackNameInput}" deployed successfully!`)
+      toast.success(`Stack "${stackNameInput}" deployed successfully!`)
       if (onRefresh) await onRefresh()
 
       setStackNameInput("")
       setNewComposeContent("")
       setIsDeployOpen(false)
     } catch (err) {
-      alert(`Deploy error: ${err.message}`)
+      toast.error(`Deploy error: ${err.message}`)
     } finally {
       setIsSaving(false)
     }
@@ -127,7 +131,13 @@ export function Stacks({ services = [], onRefresh, isAdmin = true }) {
   // Bring down stack — Admin only.
   const handleStackDown = async (stackName) => {
     if (!isAdmin) return
-    if (!confirm(`Are you sure you want to stop all containers in ${stackName}?`)) return
+    const confirmed = await askConfirm({
+      title: "Stop this stack?",
+      message: `This stops every container in "${stackName}".`,
+      confirmLabel: "Stop Stack",
+      danger: true,
+    })
+    if (!confirmed) return
 
     try {
       const res = await authFetch(`/api/stacks/${stackName}/down`, { method: "POST" })
@@ -136,7 +146,7 @@ export function Stacks({ services = [], onRefresh, isAdmin = true }) {
 
       if (onRefresh) await onRefresh()
     } catch (err) {
-      alert(`Error: ${err.message}`)
+      toast.error(`Error: ${err.message}`)
     }
   }
 

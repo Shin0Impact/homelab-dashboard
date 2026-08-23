@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from "react"
 import { UserPlus, Trash2, Shield, User as UserIcon, KeyRound, Check, Lock } from "lucide-react"
 import { authFetch } from "../../lib/api"
+import { useToast } from "../Toast"
+import { useConfirm } from "../ConfirmDialog"
 
 const glass =
   "border border-white/5 bg-card/60 backdrop-blur-xl shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset]"
 
 export function UserSettings({ token, isAdmin = true }) {
   const [users, setUsers] = useState([])
+  const toast = useToast()
+  const askConfirm = useConfirm()
   const [newUser, setNewUser] = useState("")
   const [newPass, setNewPass] = useState("")
   const [newRole, setNewRole] = useState("Viewer")
@@ -103,15 +107,22 @@ export function UserSettings({ token, isAdmin = true }) {
     }
   }
 
-  const handleDeleteUser = async (id) => {
-    if (!confirm("Are you sure you want to delete this user?")) return
+  const handleDeleteUser = async (id, username) => {
+    const confirmed = await askConfirm({
+      title: "Delete this user?",
+      message: `This permanently removes ${username ? `"${username}"'s` : "this"} account.`,
+      confirmLabel: "Delete",
+      danger: true,
+    })
+    if (!confirmed) return
+
     try {
       const res = await authFetch(`/api/users/${id}`, { method: "DELETE" })
       if (res.ok) {
         fetchUsers()
       } else {
         const data = await res.json()
-        alert(data.message || "Failed to delete user")
+        toast.error(data.message || "Failed to delete user")
       }
     } catch (err) {
       console.error("Failed to delete user", err)
@@ -213,7 +224,7 @@ export function UserSettings({ token, isAdmin = true }) {
 
                 {canDelete(u) && (
                   <button
-                    onClick={() => handleDeleteUser(u.id)}
+                    onClick={() => handleDeleteUser(u.id, u.username)}
                     className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                   >
                     <Trash2 className="h-4 w-4" />

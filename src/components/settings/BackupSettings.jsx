@@ -3,12 +3,16 @@ import { useSelector, useDispatch } from "react-redux"
 import { setSettings, resetSettings } from "../../store/settingsSlice"
 import { Download, Upload, RotateCcw } from "lucide-react"
 import { authFetch } from "../../lib/api"
+import { useToast } from "../Toast"
+import { useConfirm } from "../ConfirmDialog"
 
 const glass =
   "border border-white/5 bg-card/60 backdrop-blur-xl shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset]"
 
 export function BackupSettings({ isAdmin = true }) {
   const dispatch = useDispatch()
+  const toast = useToast()
+  const askConfirm = useConfirm()
 
   const settingsState = useSelector((state) => state.settings)
   const customizationState = useSelector((state) => state.customization) || {}
@@ -57,9 +61,9 @@ export function BackupSettings({ isAdmin = true }) {
             body: JSON.stringify(payload),
           }).catch((err) => console.error("Failed to sync restored settings to server", err))
 
-          alert("Backup restored successfully!")
+          toast.success("Backup restored successfully!")
         } catch {
-          alert("Invalid or corrupted backup file.")
+          toast.error("Invalid or corrupted backup file.")
         }
       }
     }
@@ -91,11 +95,15 @@ export function BackupSettings({ isAdmin = true }) {
         </label>
 
         <button
-          onClick={() => {
+          onClick={async () => {
             if (!isAdmin) return
-            if (confirm("Reset settings, stacks, and categories to default values?")) {
-              dispatch(resetSettings())
-            }
+            const confirmed = await askConfirm({
+              title: "Reset to defaults?",
+              message: "This resets settings, stacks, and categories to their default values.",
+              confirmLabel: "Reset",
+              danger: true,
+            })
+            if (confirmed) dispatch(resetSettings())
           }}
           disabled={!isAdmin}
           title={!isAdmin ? "Admin access required" : undefined}

@@ -18,6 +18,7 @@ import {
 import { ICONS, CategoryTag, ServiceIcon, StatusDot, glass } from "./UIHelpers"
 import { authFetch } from "../lib/api"
 import { getLaunchUrl } from "../lib/utils"
+import { useConfirm } from "./ConfirmDialog"
 
 const ICON_OPTIONS = [
   "container",
@@ -188,6 +189,8 @@ export function Manage({
   const [showHidden, setShowHidden] = useState(false)
   const [loadingHidden, setLoadingHidden] = useState(false)
 
+  const askConfirm = useConfirm()
+
   useEffect(() => {
     setLocalServices(initialServices)
   }, [initialServices])
@@ -234,14 +237,20 @@ export function Manage({
   // next poll) — so for those, this hides it from the dashboard instead,
   // and says so before doing it. Pure custom entries (added via "Add
   // Service", no container behind them) are genuinely removed.
-  const handleDeleteClick = (s) => {
+  const handleDeleteClick = async (s) => {
     if (!isAdmin) return
     const isRealContainer = !s.isCustom
-    const message = isRealContainer
-      ? `Hide "${s.name}" from the dashboard?\n\nThis won't stop or remove the actual container — Homelab OS didn't create it, so it isn't Homelab OS's to delete. It'll just stop showing up here. You can bring it back later from "Hidden Services".`
-      : `Delete "${s.name}"? This removes it from the dashboard permanently.`
 
-    if (!confirm(message)) return
+    const confirmed = await askConfirm({
+      title: isRealContainer ? "Hide from dashboard?" : "Delete service?",
+      message: isRealContainer
+        ? `This won't stop or remove the actual container — Homelab OS didn't create it, so it isn't Homelab OS's to delete. "${s.name}" will just stop showing up here. You can bring it back later from "Hidden Services".`
+        : `This removes "${s.name}" from the dashboard permanently.`,
+      confirmLabel: isRealContainer ? "Hide" : "Delete",
+      danger: !isRealContainer,
+    })
+    if (!confirmed) return
+
     if (onDelete) onDelete(s.id)
     if (isRealContainer && onRefresh) {
       // The container stays, so refresh to pull the now-hidden state.

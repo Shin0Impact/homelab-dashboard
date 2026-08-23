@@ -9,6 +9,8 @@ import { Stacks } from "./components/Stacks"
 import { Metrics } from "./components/Metrics"
 import { Sidebar, Topbar } from "./components/Navigation"
 import { Settings } from "./components/Settings"
+import { ToastProvider } from "./components/Toast"
+import { ConfirmProvider } from "./components/ConfirmDialog"
 import { authFetch, onAuthExpired } from "./lib/api"
 
 const PAGE_META = {
@@ -19,7 +21,7 @@ const PAGE_META = {
   settings: { title: "Settings", subtitle: "Preferences & System Configuration" },
 }
 
-export default function App() {
+function AppShell() {
   const dispatch = useDispatch()
 
   const [authed, setAuthed] = useState(() => {
@@ -277,5 +279,15 @@ export default function App() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function App() {
+  return (
+    <ToastProvider>
+      <ConfirmProvider>
+        <AppShell />
+      </ConfirmProvider>
+    </ToastProvider>
   )
 }
