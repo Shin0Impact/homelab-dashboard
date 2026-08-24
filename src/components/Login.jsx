@@ -5,7 +5,7 @@ const glass =
   "border border-white/5 bg-card/60 backdrop-blur-xl shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset]"
 
 export function Login({ onSignIn }) {
-  const [username, setUsername] = useState("admin")
+  const [username, setUsername] = useState(() => localStorage.getItem("homelab_last_username") || "")
   const [password, setPassword] = useState("")
   const [remember, setRemember] = useState(true)
   const [error, setError] = useState("")
@@ -58,7 +58,7 @@ export function Login({ onSignIn }) {
       const res = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, remember }),
       })
 
       const data = await res.json()
@@ -68,9 +68,12 @@ export function Login({ onSignIn }) {
       }
 
       if (data.token) {
-        localStorage.setItem("homelab_token", data.token)
-        localStorage.setItem("homelab_user", JSON.stringify(data.user))
-        onSignIn(data)
+        // Just a UI convenience so the username field isn't blank every
+        // time — not sensitive, so it's fine to always remember regardless
+        // of the "Remember Session" choice, which is about the actual
+        // login token instead.
+        localStorage.setItem("homelab_last_username", username)
+        onSignIn({ ...data, remember })
       }
     } catch (err) {
       setError(err.message)

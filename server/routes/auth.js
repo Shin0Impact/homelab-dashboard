@@ -96,10 +96,12 @@ router.post("/register", registerRateLimiter, async (req, res) => {
   };
   saveUsers([newUser]);
 
+  // First login right after creating the instance — no reason to force a
+  // re-login 12 hours later, so this one's always long-lived.
   const token = jwt.sign(
     { id: newUser.id, username: newUser.username, role: newUser.role },
     JWT_SECRET,
-    { expiresIn: "12h" },
+    { expiresIn: "30d" },
   );
 
   res.status(201).json({
@@ -109,7 +111,7 @@ router.post("/register", registerRateLimiter, async (req, res) => {
 });
 
 router.post("/login", loginRateLimiter, async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password, remember } = req.body;
 
   if (!username || !password) {
     return res.status(400).json({ message: "Username and password required" });
@@ -133,10 +135,15 @@ router.post("/login", loginRateLimiter, async (req, res) => {
   // Successful login — this IP is no longer under suspicion.
   loginRateLimiter.reset(req.ip);
 
+  // "Remember Session" actually does something now: checked gets a
+  // month-long token (effectively "until I log out"), unchecked gets the
+  // old 12-hour token. Previously this checkbox existed in the UI but was
+  // never sent to the server at all — every session expired at 12h either
+  // way, which is why staying logged in never actually worked.
   const token = jwt.sign(
     { id: user.id, username: user.username, role: user.role },
     JWT_SECRET,
-    { expiresIn: "12h" },
+    { expiresIn: remember ? "30d" : "12h" },
   );
 
   res.json({

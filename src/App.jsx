@@ -11,7 +11,7 @@ import { Sidebar, Topbar } from "./components/Navigation"
 import { Settings } from "./components/Settings"
 import { ToastProvider } from "./components/Toast"
 import { ConfirmProvider } from "./components/ConfirmDialog"
-import { authFetch, onAuthExpired } from "./lib/api"
+import { authFetch, onAuthExpired, isAuthed, getStoredUser, saveSession, clearSession } from "./lib/api"
 
 const PAGE_META = {
   dashboard: { title: "Dashboard", subtitle: "Live Container Monitor" },
@@ -24,14 +24,8 @@ const PAGE_META = {
 function AppShell() {
   const dispatch = useDispatch()
 
-  const [authed, setAuthed] = useState(() => {
-    return localStorage.getItem("homelab_authed") === "true"
-  })
-
-  const [user, setUser] = useState(() => {
-    const stored = localStorage.getItem("homelab_user")
-    return stored ? JSON.parse(stored) : null
-  })
+  const [authed, setAuthed] = useState(() => isAuthed())
+  const [user, setUser] = useState(() => getStoredUser())
 
   const isAdmin = user?.role === "Admin"
 
@@ -44,9 +38,7 @@ function AppShell() {
   const [setupRequired, setSetupRequired] = useState(null)
 
   const handleLogout = useCallback(() => {
-    localStorage.removeItem("homelab_authed")
-    localStorage.removeItem("homelab_token")
-    localStorage.removeItem("homelab_user")
+    clearSession()
     setUser(null)
     setAuthed(false)
   }, [])
@@ -209,15 +201,8 @@ function AppShell() {
   }
 
   const handleLogin = (data) => {
-    const token = typeof data === "object" ? data.token : data
-    if (token) localStorage.setItem("homelab_token", token)
-
-    if (data?.user) {
-      localStorage.setItem("homelab_user", JSON.stringify(data.user))
-      setUser(data.user)
-    }
-
-    localStorage.setItem("homelab_authed", "true")
+    saveSession({ token: data?.token, user: data?.user, remember: data?.remember ?? true })
+    if (data?.user) setUser(data.user)
     setAuthed(true)
   }
 

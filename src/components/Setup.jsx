@@ -39,8 +39,6 @@ export function Setup({ onRegistered }) {
       }
 
       if (data.token) {
-        localStorage.setItem("homelab_token", data.token)
-        localStorage.setItem("homelab_user", JSON.stringify(data.user))
         onRegistered(data)
       }
     } catch (err) {
