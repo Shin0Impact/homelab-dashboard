@@ -11,7 +11,8 @@ import { Sidebar, Topbar } from "./components/Navigation"
 import { Settings } from "./components/Settings"
 import { ToastProvider } from "./components/Toast"
 import { ConfirmProvider } from "./components/ConfirmDialog"
-import { authFetch, onAuthExpired, isAuthed, getStoredUser, saveSession, clearSession } from "./lib/api"
+import { authFetch, apiFetch, onAuthExpired, isAuthed, getStoredUser, saveSession, clearSession, DEMO_MODE } from "./lib/api"
+import { DemoBanner } from "./components/DemoBanner"
 
 const PAGE_META = {
   dashboard: { title: "Dashboard", subtitle: "Live Container Monitor" },
@@ -55,7 +56,7 @@ function AppShell() {
   useEffect(() => {
     if (authed) return
     let cancelled = false
-    fetch("/api/setup-status")
+    apiFetch("/api/setup-status")
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled) setSetupRequired(Boolean(data.setupRequired))
@@ -214,18 +215,21 @@ function AppShell() {
         </div>
       )
     }
-    return setupRequired ? (
-      <Setup onRegistered={handleLogin} />
-    ) : (
-      <Login onSignIn={handleLogin} />
+    return (
+      <>
+        {DEMO_MODE && <DemoBanner />}
+        {setupRequired ? <Setup onRegistered={handleLogin} /> : <Login onSignIn={handleLogin} />}
+      </>
     )
   }
 
   const meta = PAGE_META[page] || PAGE_META.dashboard
 
   return (
-    <div className="flex min-h-svh w-full flex-col bg-background text-foreground md:flex-row">
-      <Sidebar user={user} current={page} onNavigate={setPage} onLogout={handleLogout} />
+    <div className="flex min-h-svh w-full flex-col bg-background text-foreground">
+      {DEMO_MODE && <DemoBanner />}
+      <div className="flex min-h-0 w-full flex-1 flex-col md:flex-row">
+        <Sidebar user={user} current={page} onNavigate={setPage} onLogout={handleLogout} />
 
       <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
         <div className="hidden md:block">
@@ -263,6 +267,7 @@ function AppShell() {
           {page === "settings" && <Settings isAdmin={isAdmin} />}
         </div>
       </main>
+      </div>
     </div>
   )
 }

@@ -9,6 +9,16 @@
 // 12-hour token). Only one copy ever exists at a time — logging in clears
 // whichever storage wasn't used, so a stale token can't linger in the other
 // one and cause confusing behavior later.
+//
+// Demo mode: when built with VITE_DEMO_MODE=true (the GitHub Pages build,
+// see .github/workflows/deploy-demo.yml), there's no backend at all — every
+// request here is instead answered by the in-memory mock in mockApi.js.
+// Everything else in the app is completely unaware of this; it just calls
+// authFetch()/apiFetch() like normal and gets back something that looks
+// exactly like a real fetch() Response.
+import { mockFetch } from "./mockApi"
+
+export const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true"
 
 const AUTH_EXPIRED_EVENT = "homelab:auth-expired"
 const TOKEN_KEY = "homelab_token"
@@ -59,9 +69,14 @@ export function getAuthHeaders() {
  * Drop-in replacement for fetch() that adds the Authorization header and
  * broadcasts a single global event if the server ever responds 401, so
  * App.jsx can drop back to the login screen instead of leaving the UI in a
- * broken, silently-failing state.
+ * broken, silently-failing state. In demo mode, routes to the in-memory
+ * mock instead of the network.
  */
 export async function authFetch(url, options = {}) {
+  if (DEMO_MODE) {
+    return mockFetch(url, options)
+  }
+
   const headers = { ...(options.headers || {}), ...getAuthHeaders() }
   const res = await fetch(url, { ...options, headers })
 
@@ -70,6 +85,18 @@ export async function authFetch(url, options = {}) {
   }
 
   return res
+}
+
+/**
+ * Same idea as authFetch(), for the handful of calls that happen before a
+ * token exists at all (login, register, the setup-status check). No auth
+ * header to attach, but still demo-aware.
+ */
+export async function apiFetch(url, options = {}) {
+  if (DEMO_MODE) {
+    return mockFetch(url, options)
+  }
+  return fetch(url, options)
 }
 
 export function onAuthExpired(callback) {

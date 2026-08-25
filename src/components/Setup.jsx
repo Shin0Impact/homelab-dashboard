@@ -1,5 +1,6 @@
 import React, { useState } from "react"
 import { ChevronRight, Lock, Server, User, ShieldCheck } from "lucide-react"
+import { apiFetch } from "../lib/api"
 
 const glass =
   "border border-white/5 bg-card/60 backdrop-blur-xl shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset]"
@@ -26,7 +27,7 @@ export function Setup({ onRegistered }) {
 
     setLoading(true)
     try {
-      const res = await fetch("/api/register", {
+      const res = await apiFetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),

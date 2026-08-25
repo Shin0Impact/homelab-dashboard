@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react"
 import { ChevronRight, Lock, Server, User, Wifi, Globe, Laptop } from "lucide-react"
+import { apiFetch } from "../lib/api"
 
 const glass =
   "border border-white/5 bg-card/60 backdrop-blur-xl shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset]"
@@ -55,7 +56,7 @@ export function Login({ onSignIn }) {
     setLoading(true)
 
     try {
-      const res = await fetch("/api/login", {
+      const res = await apiFetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password, remember }),
