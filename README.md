@@ -1,6 +1,17 @@
 # Homelab OS
 
-A lightweight full-stack dashboard and Docker stack manager for self-hosted infrastructure. Homelab OS provides a single interface to monitor system telemetry, manage Docker containers, auto-discover Compose stacks on host disks, and control services through a web UI.
+A lightweight full-stack dashboard and Docker stack manager for self-hosted infrastructure.
+
+I built it for my own homelab server, which runs Frigate, Immich and other self-hosted services in Docker. It is the one place where I check how the server is doing and start, stop or edit those containers. Homelab OS provides a single interface to monitor system telemetry, manage Docker containers, auto-discover Compose stacks on host disks, and control services through a web UI.
+
+## At a glance
+
+| | |
+|---|---|
+| **What** | Dashboard and Docker stack manager for a self-hosted server |
+| **Stack** | React 19, Vite, Redux Toolkit, Tailwind CSS (frontend); Node.js, Express, Dockerode, systeminformation (backend) |
+| **Deploy** | Two-stage Dockerfile and Docker Compose; talks to the Docker socket directly; Tailscale supported |
+| **Demo** | A mock-data demo is built by `.github/workflows/deploy-demo.yml` and published to GitHub Pages |
 
 ## Features
 
@@ -69,8 +80,8 @@ services:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-username/homelab-os.git
-   cd homelab-os
+   git clone https://github.com/Shin0Impact/homelab-dashboard.git
+   cd homelab-dashboard
    ```
 2. Build the image and start the container:
    ```bash
@@ -84,7 +95,7 @@ Docker Desktop doesn't have a way to build and launch a Compose stack purely fro
 
 1. Install [Docker Desktop for Linux](https://docs.docker.com/desktop/setup/install/linux/).
 2. Run the one-time command-line setup above from a terminal.
-3. Manage the stack going forward from the **Containers** tab, under the `homelab-os` group.
+3. Manage the stack going forward from the **Containers** tab, under the `homelab-dashboard` group.
 
 ### Windows
 
@@ -97,8 +108,8 @@ WSL 2 is the more reliable route if you want the Tailscale integration to work, 
    - **Settings > Resources > WSL Integration** — enable integration for your installed distribution (e.g., Ubuntu).
 2. Open your WSL terminal (e.g., Ubuntu) and clone the repository:
    ```bash
-   git clone https://github.com/your-username/homelab-os.git
-   cd homelab-os
+   git clone https://github.com/Shin0Impact/homelab-dashboard.git
+   cd homelab-dashboard
    ```
 3. Build and start, same as Linux:
    ```bash
@@ -113,7 +124,7 @@ WSL 2 is the more reliable route if you want the Tailscale integration to work, 
 Same rule as Linux: the first `docker compose up -d --build` has to run from a terminal (inside WSL, or PowerShell/CMD for native Windows) — there's no GUI-only path to the initial build. Once it's running:
 
 1. Open Docker Desktop.
-2. Find the `homelab-os` group in the **Containers** tab.
+2. Find the `homelab-dashboard` group in the **Containers** tab.
 3. Start, stop, restart, or view logs for the stack from there.
 4. Access the dashboard at `http://localhost:3333`.
 
@@ -133,8 +144,8 @@ This rebuilds the image from the updated Dockerfile/source and recreates the con
 Clone the repository:
 
 ```bash
-git clone https://github.com/your-username/homelab-os.git
-cd homelab-os
+git clone https://github.com/Shin0Impact/homelab-dashboard.git
+cd homelab-dashboard
 ```
 
 Install dependencies:
@@ -148,11 +159,3 @@ Start the development server:
 ```bash
 npm run dev
 ```
-
-## Contributing
-
-Contributions are welcome. Please open an issue to discuss significant changes before submitting a pull request.
-
-## License
-
-Add your license of choice here (e.g., MIT).
